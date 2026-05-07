@@ -1,5 +1,5 @@
 # dotbashrc
-# Version 2026.4.220855
+# Version 2026.5.71951
 # https://github.com/jakehildreth/profile/profiles/dotbashrc
 
 #region Self-Update
@@ -145,5 +145,23 @@ https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instruc
         printf '%s' "$instructions" | xsel --clipboard --input
     else
         printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$instructions"
+    fi
+}
+
+# dcc — copy conventional commit workflow prompt to clipboard
+dcc() {
+    local prompt='Compare this branch against main.
+Using the diff, draft a conventional commit following my standards, then present it to me for approval.
+If I approve it, commit & push.
+Then draft a pull request title and description.
+Return the title and description as separate copy-pastable blocks.'
+    if [[ "$(uname -s)" == 'Darwin' ]]; then
+        printf '%s' "$prompt" | pbcopy
+    elif command -v xclip &>/dev/null; then
+        printf '%s' "$prompt" | xclip -selection clipboard
+    elif command -v xsel &>/dev/null; then
+        printf '%s' "$prompt" | xsel --clipboard --input
+    else
+        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$prompt"
     fi
 }
