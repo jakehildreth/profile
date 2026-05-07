@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.4.220855
+# Version 2026.5.71951
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -192,4 +192,14 @@ https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instruc
     }
     
     $instructions | Set-Clipboard
+}
+
+function dcc {
+    @'
+Compare this branch against main.
+Using the diff, draft a conventional commit following my standards, then present it to me for approval.
+If I approve it, commit & push.
+Then draft a pull request title and description.
+Return the title and description as separate copy-pastable blocks.
+'@ | Set-Clipboard
 }
