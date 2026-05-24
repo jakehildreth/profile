@@ -43,7 +43,7 @@ function Write-Fail {
     Write-Error -ErrorRecord $errorRecord -ErrorAction SilentlyContinue
 }
 
-Set-Variable -Name sourceUri -Value 'https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/DollarSignPROFILE.ps1' -Option ReadOnly
+Set-Variable -Name sourceUri -Value 'https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/DollarSignPROFILE.ps1' -Option ReadOnly -Force
 
 try {
     $remoteContent = (Invoke-WebRequest -Uri $sourceUri -UseBasicParsing -TimeoutSec 10).Content

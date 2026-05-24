@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.5.72053
+# Version 2026.5.241027
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -113,8 +113,8 @@ function $FunctionName {
 function prompt {
     Write-Host
     $CurrentLocation = $executionContext.SessionState.Path.CurrentLocation
-    $GitBranch = & { $ErrorActionPreference = 'SilentlyContinue'; git branch --show-current 2>&1 } | Where-Object { $_ -is [string] }
-    if ($LASTEXITCODE -eq 0 -and $GitBranch) {
+    $GitBranch = & { $ErrorActionPreference = 'SilentlyContinue'; git rev-parse --abbrev-ref HEAD 2>&1 } | Where-Object { $_ -is [string] }
+    if ($LASTEXITCODE -eq 0 -and $GitBranch -and $GitBranch -ne 'HEAD') {
         Write-Host "[$($Host.UI.RawUI.WindowSize.Width)x$($Host.UI.RawUI.WindowSize.Height)] $($CurrentLocation.ToString() -ireplace [regex]::escape($HOME),'~') [$GitBranch]"
     } else {
         Write-Host "[$($Host.UI.RawUI.WindowSize.Width)x$($Host.UI.RawUI.WindowSize.Height)] $($CurrentLocation.ToString() -ireplace [regex]::escape($HOME),'~')"
