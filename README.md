@@ -9,7 +9,7 @@ Cross-platform shell profiles for PowerShell, bash, zsh, and fish with consisten
 | `profiles/DollarSignPROFILE.ps1` | PowerShell (pwsh + Windows PowerShell) |
 | `profiles/dotbashrc` | bash |
 | `profiles/dotzshrc` | zsh |
-| `profiles/dotfishrc` | fish |
+| `profiles/configdotfish` | fish |
 
 ## Quick Start
 

@@ -7,7 +7,7 @@
 
 ## Context
 
-The managed profile files (`DollarSignPROFILE.ps1`, `dotbashrc`, `dotzshrc`, `dotfishrc`) had
+The managed profile files (`DollarSignPROFILE.ps1`, `dotbashrc`, `dotzshrc`, `configdotfish`) had
 no version information in their headers. When a user reports a bug or asks for help,
 there is no way to confirm which version of the profile is installed without diffing
 against the repo. The project already uses CalVer (`yyyy.M.dHHmm`) for all other
@@ -36,7 +36,7 @@ unambiguous which "version" of the profile is installed.
 
 ### 2. Version must be updated on every profile change
 
-**Decision:** Any modification to `DollarSignPROFILE.ps1`, `dotbashrc`, `dotzshrc`, or `dotfishrc`
+**Decision:** Any modification to `DollarSignPROFILE.ps1`, `dotbashrc`, `dotzshrc`, or `configdotfish`
 must include a version bump to the `# Version` header reflecting the actual date and
 time of the change. This rule is encoded in `.github/copilot-instructions.md`.
 

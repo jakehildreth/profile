@@ -1,6 +1,6 @@
-# dotfishrc
-# Version 2026.7.121411
-# https://github.com/jakehildreth/profile/profiles/dotfishrc
+# configdotfish
+# Version 2026.7.121424
+# https://github.com/jakehildreth/profile/profiles/configdotfish
 
 #region Self-Update
 function __dollarsign_autoupdate

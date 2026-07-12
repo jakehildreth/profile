@@ -5,7 +5,7 @@
 #   Installs DollarSignPROFILE to the current user's bash, zsh, or fish rc file.
 #
 # .DESCRIPTION
-#   Downloads dotbashrc, dotzshrc, or dotfishrc from GitHub,
+#   Downloads dotbashrc, dotzshrc, or configdotfish from GitHub,
 #   backs up the existing rc file, writes the new profile, and reports status.
 #   Target shell is determined from the invoking shell ($PPID). Only bash, zsh, and fish are supported.
 #
@@ -24,7 +24,7 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 readonly _BASH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotbashrc'
 readonly _ZSH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotzshrc'
-readonly _FISH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotfishrc'
+readonly _FISH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/configdotfish'
 
 readonly _CYAN='\033[0;36m'
 readonly _GREEN='\033[0;32m'
@@ -66,7 +66,7 @@ _install_for_shell() {
 
     if [[ -f "$rc_file" ]]; then
         local is_dollarsign=0
-        grep -qE 'dot(bash|zsh|fish)rc' "$rc_file" 2>/dev/null && is_dollarsign=1 || true
+        grep -qE 'dot(bash|zsh)rc|configdotfish' "$rc_file" 2>/dev/null && is_dollarsign=1 || true
 
         local preference
         preference="$(sed -n 's/^# AutoUpdate=//p' "$rc_file" | head -1)"

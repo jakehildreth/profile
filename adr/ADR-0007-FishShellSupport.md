@@ -16,9 +16,9 @@ support.
 
 ## Decisions
 
-### 1. Separate `dotfishrc` file over a shared shell rc
+### 1. Separate `configdotfish` file over a shared shell rc
 
-**Decision:** Produce `profiles/dotfishrc` as an independent file, parallel to
+**Decision:** Produce `profiles/configdotfish` as an independent file, parallel to
 `dotbashrc` and `dotzshrc`.
 
 **Rationale:** Fish syntax differs fundamentally from POSIX shell syntax. Functions
@@ -48,7 +48,7 @@ universal variable to point at an alternative file.
 
 ### 3. Feature parity with bash/zsh profiles
 
-**Decision:** `dotfishrc` implements the same set of features as `dotbashrc` and
+**Decision:** `configdotfish` implements the same set of features as `dotbashrc` and
 `dotzshrc`: self-update, UTF-8 locale, keybindings, `calver`, `new_credential`,
 git-aware prompt, `get_ip_address`, `gai`, and `dcc`.
 
@@ -99,7 +99,7 @@ word-splitting with `eval`.
 
 ### 6. Self-update runs the shared `install.sh` via `psub`
 
-**Decision:** `dotfishrc` self-update runs `bash (curl ... | psub)`, passing the
+**Decision:** `configdotfish` self-update runs `bash (curl ... | psub)`, passing the
 install script to bash through a temporary file.
 
 **Rationale:** The install script is written in bash and detects the parent shell
