@@ -2,12 +2,12 @@
 # install.sh
 #
 # .SYNOPSIS
-#   Installs DollarSignPROFILE to the current user's bash or zsh rc file.
+#   Installs DollarSignPROFILE to the current user's bash, zsh, or fish rc file.
 #
 # .DESCRIPTION
-#   Downloads dotbashrc or dotzshrc from GitHub,
+#   Downloads dotbashrc, dotzshrc, or dotfishrc from GitHub,
 #   backs up the existing rc file, writes the new profile, and reports status.
-#   Target shell is determined from the invoking shell ($PPID). Only bash and zsh are supported.
+#   Target shell is determined from the invoking shell ($PPID). Only bash, zsh, and fish are supported.
 #
 # .EXAMPLE
 #   curl profile.jakehildreth.com | $SHELL
@@ -24,6 +24,7 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 readonly _BASH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotbashrc'
 readonly _ZSH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotzshrc'
+readonly _FISH_PROFILE_URL='https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/profiles/dotfishrc'
 
 readonly _CYAN='\033[0;36m'
 readonly _GREEN='\033[0;32m'
@@ -65,7 +66,7 @@ _install_for_shell() {
 
     if [[ -f "$rc_file" ]]; then
         local is_dollarsign=0
-        grep -qE 'dot(bash|zsh)rc' "$rc_file" 2>/dev/null && is_dollarsign=1 || true
+        grep -qE 'dot(bash|zsh|fish)rc' "$rc_file" 2>/dev/null && is_dollarsign=1 || true
 
         local preference
         preference="$(sed -n 's/^# AutoUpdate=//p' "$rc_file" | head -1)"
@@ -92,7 +93,7 @@ _install_for_shell() {
             if [[ "$is_dollarsign" -eq 1 ]]; then
                 __ask "A new version of your $(basename "$rc_file") is available. Update it?"
             else
-                __ask "$(basename "$rc_file") already exists and does not appear to be a dot*shrc install. Overwrite it?"
+                __ask "$(basename "$rc_file") already exists and does not appear to be a DollarSignPROFILE install. Overwrite it?"
             fi
 
             while true; do
@@ -181,8 +182,9 @@ _invoking_shell="$(ps -p $PPID -o comm= 2>/dev/null | sed 's|.*/||; s/^-//')"
 case "$_invoking_shell" in
     bash)  _install_for_shell 'bash' "$_BASH_PROFILE_URL" "$HOME/.bashrc" ;;
     zsh)   _install_for_shell 'zsh'  "$_ZSH_PROFILE_URL"  "${ZDOTDIR:-$HOME}/.zshrc" ;;
+    fish)  _install_for_shell 'fish' "$_FISH_PROFILE_URL" "$HOME/.config/fish/config.fish" ;;
     *)
-        __error "Unsupported shell '${_invoking_shell}'. Only bash and zsh are supported."
+        __error "Unsupported shell '${_invoking_shell}'. Only bash, zsh, and fish are supported."
         exit 1
         ;;
 esac

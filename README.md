@@ -1,6 +1,6 @@
 # profile
 
-Cross-platform shell profiles for PowerShell, bash, and zsh with consistent keybindings, a git-aware prompt, and self-updating installs.
+Cross-platform shell profiles for PowerShell, bash, zsh, and fish with consistent keybindings, a git-aware prompt, and self-updating installs.
 
 ## Profiles
 
@@ -9,6 +9,7 @@ Cross-platform shell profiles for PowerShell, bash, and zsh with consistent keyb
 | `profiles/DollarSignPROFILE.ps1` | PowerShell (pwsh + Windows PowerShell) |
 | `profiles/dotbashrc` | bash |
 | `profiles/dotzshrc` | zsh |
+| `profiles/dotfishrc` | fish |
 
 ## Quick Start
 
@@ -18,13 +19,13 @@ Cross-platform shell profiles for PowerShell, bash, and zsh with consistent keyb
 iwr profile.jakehildreth.com | iex
 ```
 
-### bash / zsh
+### bash / zsh / fish
 
 ```bash
 curl profile.jakehildreth.com | $SHELL
 ```
 
-The installer detects your shell automatically, backs up your existing `$PROFILE`/`.zshrc`/`.bashrc` file with a timestamp, writes the new profile, and reloads your shell.
+The installer detects your shell automatically, backs up your existing `$PROFILE`/`.zshrc`/`.bashrc`/`~/.config/fish/config.fish` file with a timestamp, writes the new profile, and reloads your shell.
 
 On each subsequent interactive terminal session, the profile loads and checks for updates.
 
@@ -32,7 +33,7 @@ On each subsequent interactive terminal session, the profile loads and checks fo
 
 ### Keybindings
 
-Consistent across all three shells on Windows and macOS:
+Consistent across all four shells on Windows and macOS:
 
 | Chord | Action |
 |---|---|
@@ -49,7 +50,7 @@ Displays terminal dimensions, current path, git branch, and shell name.
 
 ```
 [100x35] ~/dev/profile [main]
-PS7>
+fish>
 ```
 
 ### Functions
@@ -74,7 +75,7 @@ When an update is available and no preference is set, you are prompted with a di
 
 | File | Description |
 |---|---|
-| `installers/install.sh` | bash/zsh installer (curl-pipeable) |
+| `installers/install.sh` | bash/zsh/fish installer (curl-pipeable) |
 | `installers/Install-DollarSignPROFILE.ps1` | PowerShell installer (iwr-pipeable) |
 
 Both installers:

@@ -1,0 +1,175 @@
+# dotfishrc
+# Version 2026.7.121411
+# https://github.com/jakehildreth/profile/profiles/dotfishrc
+
+#region Self-Update
+function __dollarsign_autoupdate
+    status --is-interactive || return 0
+    bash (curl -fsSL --connect-timeout 3 'https://raw.githubusercontent.com/jakehildreth/profile/refs/heads/main/installers/install.sh' 2>/dev/null | psub)
+end
+__dollarsign_autoupdate
+functions -e __dollarsign_autoupdate
+#endregion Self-Update
+
+# UTF-8 encoding
+set -gx LANG 'en_US.UTF-8'
+set -gx LC_ALL 'en_US.UTF-8'
+
+# Keybindings — interactive shells only
+if status --is-interactive
+    bind \cu backward-kill-line
+    bind \e kill-whole-line
+    bind \e\[1\;3D backward-word
+    bind \e\[1\;3C forward-word
+    bind \e\[1\;5D backward-word
+    bind \e\[1\;5C forward-word
+    bind \e\x7f backward-kill-word
+    bind \b backward-kill-word
+    bind \e\[3\;5~ kill-word
+    bind \e\[3\;3~ kill-word
+end
+
+# calver — print current CalVer timestamp (yyyy.M.dHHmm)
+function calver
+    set -l y (date +%Y)
+    set -l m (date +%m)
+    set -l d (date +%d)
+    set -l hm (date +%H%M)
+    set -l m (string trim -l -c 0 $m)
+    set -l d (string trim -l -c 0 $d)
+    printf '%s.%s.%s%s\n' $y $m $d $hm
+end
+
+# new_credential — interactive credential prompt
+# Result stored in __CREDENTIAL_USER and __CREDENTIAL_PASS
+function new_credential
+    printf '\nFish credential request\nEnter your credentials.\n\n'
+    read -P 'User: ' user
+    read -s -P "Password for user $user: " pass
+    printf '\n'
+    set -gx __CREDENTIAL_USER $user
+    set -gx __CREDENTIAL_PASS $pass
+end
+
+# Custom prompt — rebuilt before each prompt via fish_prompt
+function fish_prompt
+    set -l git_branch (git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    set -l path_display (string replace -r '^'"$HOME"'' '~' $PWD)
+    set -l branch_str ''
+    if test -n "$git_branch"
+        set branch_str " [$git_branch]"
+    end
+    set -l gt ''
+    set -l shlvl_depth $SHLVL
+    if status --is-login; and test $shlvl_depth -gt 1
+        set shlvl_depth (math $shlvl_depth - 1)
+    end
+    for i in (seq 1 $shlvl_depth)
+        set gt "$gt>"
+    end
+    printf '\n[%sx%s] %s%s\nfish%s ' $COLUMNS $LINES $path_display $branch_str $gt
+end
+
+# get_ip_address — cross-platform IP address retrieval
+function get_ip_address
+    if test (uname -s) = Darwin
+        for i in (ifconfig -l | string split ' ')
+            if test "$i" = lo0
+                continue
+            end
+            set -l ip (ifconfig $i 2>/dev/null | awk '/inet [1-9]/{print $2; exit}')
+            if test -n "$ip"
+                printf '%s: %s\n' $i $ip
+            end
+        end
+    else if command -v ip >/dev/null 2>&1
+        ip addr show | awk '
+            /^[0-9]+: / {
+                split($2, a, "@")
+                iface = a[1]
+                sub(/:$/, "", iface)
+            }
+            /inet [1-9]/ && iface != "lo" {
+                addr = $2
+                sub(/\/.*/, "", addr)
+                print iface ": " addr
+            }
+        '
+    else
+        printf '[!] No IP address retrieval method found.\n' >&2
+    end
+end
+
+# gai — copy AI instruction URLs to clipboard
+# flags: -p personal, -w powershell, -t pester (default: all)
+function gai
+    argparse p w t -- $argv
+
+    set -l usePersonal false
+    set -l usePowerShell false
+    set -l usePester false
+
+    if set -q _flag_p
+        set usePersonal true
+    end
+    if set -q _flag_w
+        set usePowerShell true
+    end
+    if set -q _flag_t
+        set usePester true
+    end
+
+    if test "$usePersonal" = false; and test "$usePowerShell" = false; and test "$usePester" = false
+        set usePersonal true
+        set usePowerShell true
+        set usePester true
+    end
+
+    set -l instructions ''
+
+    if test "$usePersonal" = true
+        set instructions "$instructions"'Please read and follow my personal instructions:
+https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md
+'
+    end
+
+    if test "$usePowerShell" = true
+        set instructions "$instructions"'then read and follow PowerShell best practices:
+https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md
+'
+    end
+
+    if test "$usePester" = true
+        set instructions "$instructions"'then read and follow Pester testing best practices:
+https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md'
+    end
+
+    if test (uname -s) = Darwin
+        printf '%s' $instructions | pbcopy
+    else if command -v xclip >/dev/null 2>&1
+        printf '%s' $instructions | xclip -selection clipboard
+    else if command -v xsel >/dev/null 2>&1
+        printf '%s' $instructions | xsel --clipboard --input
+    else
+        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' $instructions
+    end
+end
+
+# dcc — copy conventional commit workflow prompt to clipboard
+function dcc
+    set -l prompt 'Compare the current state of this project against its most recent commit.
+Using the diff, draft a conventional commit following my standards, and present it to me for approval.
+If I approve the commit message, commit the changes & push them.
+If the current branch is not main, ask me if I want to do a PR.
+If I say yes, draft a pull request title and description, then return the title and description as separate copy-pastable blocks.
+If I say no, tell me you'"'"'re ready for the next task. In a robot style.'
+    if test (uname -s) = Darwin
+        printf '%s' $prompt | pbcopy
+    else if command -v xclip >/dev/null 2>&1
+        printf '%s' $prompt | xclip -selection clipboard
+    else if command -v xsel >/dev/null 2>&1
+        printf '%s' $prompt | xsel --clipboard --input
+    else
+        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' $prompt
+    end
+end
