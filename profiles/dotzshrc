@@ -1,5 +1,5 @@
 # dotzshrc
-# Version 2026.5.72053
+# Version 2026.8.52049
 # https://github.com/jakehildreth/profile/profiles/dotzshrc
 
 #region Self-Update
@@ -111,56 +111,54 @@ get_ip_address() {
     fi
 }
 
-# gai — copy AI instruction URLs to clipboard
-# flags: -p personal, -w powershell, -t pester (default: all)
+# gai — copy global Copilot instruction installer prompt to clipboard
 gai() {
-    local usePersonal=false
-    local usePowerShell=false
-    local usePester=false
+    local prompt='---
+description: "Install or update Jake'\''s global user-level Copilot instructions from raw URLs"
+version: "2026.8.51418"
+---
 
-    local OPTIND opt
-    while getopts ':pwt' opt; do
-        case "$opt" in
-            p) usePersonal=true ;;
-            w) usePowerShell=true ;;
-            t) usePester=true ;;
-            *) ;;
-        esac
-    done
+# Install Global Copilot Instructions
 
-    if [[ "$usePersonal" == false && "$usePowerShell" == false && "$usePester" == false ]]; then
-        usePersonal=true
-        usePowerShell=true
-        usePester=true
-    fi
+Create or update my user-level VS Code: Copilot instruction files so they apply automatically to every workspace without me having to paste URLs at the start of each chat.
 
-    local instructions=''
+## Source URLs to fetch
 
-    if [[ "$usePersonal" == true ]]; then
-        instructions+='Please read and follow my personal instructions:
-https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md
+1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
+2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
+3. **Pester v5 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md`
+
+## Target location
+
+Create the directory if it does not exist: `{{VSCODE_USER_PROMPTS_FOLDER}}/../instructions/`.
+
+This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code: loads user-level `.instructions.md` files.
+
+## Files to create/update
+
+| File | applyTo | Content |
+|---|---|---|
+| `personal.instructions.md` | `**/*` | Jake'\''s interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instructions. |
+| `powershell.instructions.md` | `**/*.ps1,**/*.psm1` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
+| `pester.instructions.md` | `**/*.Tests.ps1` | Pester v5 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+
+## Requirements
+
+- Add YAML frontmatter with `applyTo` and `description` fields to each generated instruction file.
+- After fetching each source URL, strip its existing frontmatter (if any) before inserting the remaining body content.
+- If `personal.instructions.md` already exists, merge new source content without overwriting project-specific priorities. The conflict resolution priority in the personal file must remain: project-level instructions > this file > external referenced docs.
+- After creating/updating the files, list them and confirm their paths.
+- If the source URLs are unreachable, stop and report the error; do not create empty instruction files.
 '
-    fi
-
-    if [[ "$usePowerShell" == true ]]; then
-        instructions+='then read and follow PowerShell best practices:
-https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md
-'
-    fi
-
-    if [[ "$usePester" == true ]]; then
-        instructions+='then read and follow Pester testing best practices:
-https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md'
-    fi
 
     if [[ "$(uname -s)" == 'Darwin' ]]; then
-        printf '%s' "$instructions" | pbcopy
+        printf '%s' "$prompt" | pbcopy
     elif command -v xclip &>/dev/null; then
-        printf '%s' "$instructions" | xclip -selection clipboard
+        printf '%s' "$prompt" | xclip -selection clipboard
     elif command -v xsel &>/dev/null; then
-        printf '%s' "$instructions" | xsel --clipboard --input
+        printf '%s' "$prompt" | xsel --clipboard --input
     else
-        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$instructions"
+        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$prompt"
     fi
 }
 

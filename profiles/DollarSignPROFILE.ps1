@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.5.241027
+# Version 2026.8.52049
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -149,49 +149,45 @@ function Get-IPAddress {
 }
 
 function gai {
-    param(
-        [switch]$Personal,
-        [switch]$PowerShell,
-        [switch]$Pester
-    )
+    @'
+---
+description: "Install or update Jake's global user-level Copilot instructions from raw URLs"
+version: "2026.8.51418"
+---
 
-    $usePersonal = $Personal.IsPresent
-    $usePowerShell = $PowerShell.IsPresent
-    $usePester = $Pester.IsPresent
+# Install Global Copilot Instructions
 
-    if (-not ($usePersonal -or $usePowerShell -or $usePester)) {
-        $usePersonal = $true
-        $usePowerShell = $true
-        $usePester = $true
-    }
+Create or update my user-level VS Code Copilot instruction files so they apply automatically to every workspace without me having to paste URLs at the start of each chat.
 
-    $instructions = ''
+## Source URLs to fetch
 
-    if ($usePersonal) {
-        $instructions += @'
-Please read and follow my personal instructions:
-https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md
+1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
+2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
+3. **Pester v5 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md`
 
-'@
-    }
+## Target location
 
-    if ($usePowerShell) {
-        $instructions += @'
-Read and follow PowerShell best practices:
-https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md
+Create the directory if it does not exist: `{{VSCODE_USER_PROMPTS_FOLDER}}/../instructions/`.
 
-'@
-    }
+This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code loads user-level `.instructions.md` files.
 
-    if ($usePester) {
-        $instructions += @'
-Read and follow Pester testing best practices:
-https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md
+## Files to create/update
 
-'@
-    }
-    
-    $instructions | Set-Clipboard
+| File | applyTo | Content |
+|---|---|---|
+| `personal.instructions.md` | `**/*` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instructions. |
+| `powershell.instructions.md` | `**/*.ps1,**/*.psm1` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
+| `pester.instructions.md` | `**/*.Tests.ps1` | Pester v5 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+
+## Requirements
+
+- Add YAML frontmatter with `applyTo` and `description` fields to each generated instruction file.
+- After fetching each source URL, strip its existing frontmatter (if any) before inserting the remaining body content.
+- If `personal.instructions.md` already exists, merge new source content without overwriting project-specific priorities. The conflict resolution priority in the personal file must remain: project-level instructions > this file > external referenced docs.
+- After creating/updating the files, list them and confirm their paths.
+- If the source URLs are unreachable, stop and report the error; do not create empty instruction files.
+
+'@ | Set-Clipboard
 }
 
 function dcc {
