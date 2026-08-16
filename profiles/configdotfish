@@ -1,5 +1,5 @@
 # configdotfish
-# Version 2026.8.52049
+# Version 2026.8.160900
 # https://github.com/jakehildreth/profile/profiles/configdotfish
 
 #region Self-Update
@@ -103,25 +103,32 @@ end
 # gai — copy global Copilot instruction installer prompt to clipboard
 function gai
     set -l prompt "---
-description: \"Install or update Jake's global user-level Copilot instructions from raw URLs\"
-version: \"2026.8.51418\"
+description: \"Install or update Jake's global user-level Copilot instructions and skills from raw URLs\"
+version: \"2026.8.160900\"
 ---
 
-# Install Global Copilot Instructions
+# Install Global Copilot Instructions and Skills
 
-Create or update my user-level VS Code: Copilot instruction files so they apply automatically to every workspace without me having to paste URLs at the start of each chat.
+Create or update my user-level VS Code Copilot instruction files so they apply automatically to every workspace without me having to paste URLs at the start of each chat. Also install the awesome-copilot pester-migration skill at user level.
 
 ## Source URLs to fetch
 
 1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
 2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
-3. **Pester v5 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-5.instructions.md`
+3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
+
+## Skill source URLs to fetch
+
+1. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/SKILL.md`
+2. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v3-to-v4.md`
+3. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v4-to-v5.md`
+4. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v5-to-v6.md`
 
 ## Target location
 
 Create the directory if it does not exist: `{{VSCODE_USER_PROMPTS_FOLDER}}/../instructions/`.
 
-This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code: loads user-level `.instructions.md` files.
+This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code loads user-level `.instructions.md` files.
 
 ## Files to create/update
 
@@ -129,12 +136,25 @@ This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code: loads
 |---|---|---|
 | `personal.instructions.md` | `**/*` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instructions. |
 | `powershell.instructions.md` | `**/*.ps1,**/*.psm1` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
-| `pester.instructions.md` | `**/*.Tests.ps1` | Pester v5 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+| `pester.instructions.md` | `**/*.Tests.ps1` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+
+## Skills to install
+
+Install into the user-level skills folder `~/.copilot/skills/pester-migration/`. Create the directory tree if it does not exist.
+
+| Source file | Target path |
+|---|---|
+| `SKILL.md` | `~/.copilot/skills/pester-migration/SKILL.md` |
+| `references/v3-to-v4.md` | `~/.copilot/skills/pester-migration/references/v3-to-v4.md` |
+| `references/v4-to-v5.md` | `~/.copilot/skills/pester-migration/references/v4-to-v5.md` |
+| `references/v5-to-v6.md` | `~/.copilot/skills/pester-migration/references/v5-to-v6.md` |
+
+Write skill files verbatim from upstream. Do NOT strip or add frontmatter. Do NOT modify the content in any way.
 
 ## Requirements
 
 - Add YAML frontmatter with `applyTo` and `description` fields to each generated instruction file.
-- After fetching each source URL, strip its existing frontmatter (if any) before inserting the remaining body content.
+- After fetching each instruction source URL, strip its existing frontmatter (if any) before inserting the remaining body content.
 - If `personal.instructions.md` already exists, merge new source content without overwriting project-specific priorities. The conflict resolution priority in the personal file must remain: project-level instructions > this file > external referenced docs.
 - After creating/updating the files, list them and confirm their paths.
 - If the source URLs are unreachable, stop and report the error; do not create empty instruction files.
