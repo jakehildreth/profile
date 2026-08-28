@@ -1,5 +1,5 @@
 # dotzshrc
-# Version 2026.8.160900
+# Version 2026.8.281522
 # https://github.com/jakehildreth/profile/profiles/dotzshrc
 
 #region Self-Update
@@ -137,9 +137,9 @@ Create or update my user-level VS Code Copilot instruction files so they apply a
 
 ## Target location
 
-Create the directory if it does not exist: `{{VSCODE_USER_PROMPTS_FOLDER}}/../instructions/`.
+Create the directory if it does not exist: `~/.copilot/instructions/`.
 
-This is the folder next to `{{VSCODE_USER_PROMPTS_FOLDER}}` where VS Code loads user-level `.instructions.md` files.
+This is the user-level folder where VS Code, Copilot CLI, and other harnesses load `.instructions.md` files.
 
 ## Files to create/update
 
@@ -169,6 +169,92 @@ Write skill files verbatim from upstream. Do NOT strip or add frontmatter. Do NO
 - If `personal.instructions.md` already exists, merge new source content without overwriting project-specific priorities. The conflict resolution priority in the personal file must remain: project-level instructions > this file > external referenced docs.
 - After creating/updating the files, list them and confirm their paths.
 - If the source URLs are unreachable, stop and report the error; do not create empty instruction files.
+'
+
+    if [[ "$(uname -s)" == 'Darwin' ]]; then
+        printf '%s' "$prompt" | pbcopy
+    elif command -v xclip &>/dev/null; then
+        printf '%s' "$prompt" | xclip -selection clipboard
+    elif command -v xsel &>/dev/null; then
+        printf '%s' "$prompt" | xsel --clipboard --input
+    else
+        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$prompt"
+    fi
+}
+
+# cci — copy global Claude Code instruction installer prompt to clipboard
+cci() {
+    local prompt='---
+description: "Install or update Jake'\''s global user-level agent instructions and skills from raw URLs"
+version: "2026.8.281519"
+---
+
+# Install Global Claude Code Instructions and Skills
+
+Create or update my user-level agent instruction files so they apply automatically to every
+workspace without me having to paste URLs at the start of each chat. Also install the
+awesome-copilot pester-migration skill at user level.
+
+## Source URLs to fetch
+
+1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
+2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
+3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
+
+## Skill source URLs to fetch
+
+1. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/SKILL.md`
+2. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v3-to-v4.md`
+3. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v4-to-v5.md`
+4. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v5-to-v6.md`
+
+## Target location
+
+Create the directory `~/.claude/` if it does not exist, and within it the file `CLAUDE.md` if it
+does not exist. Claude Code loads `~/.claude/CLAUDE.md` automatically at the start of every
+session, in every workspace, with no per-file-type scoping - unlike Copilot'\''s `applyTo`-glob
+`.instructions.md` files, everything in it is always in context regardless of what you'\''re editing.
+To keep the PowerShell/Pester content separately updatable without losing that always-on
+behavior, split it into imported fragments using Claude Code'\''s `@path` import syntax from within
+`CLAUDE.md`.
+
+## Files to create/update
+
+| File | Content |
+|---|---|
+| `~/.claude/CLAUDE.md` | Jake'\''s interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow - plus `@powershell.md` and `@pester.md` import lines so the two language-specific fragments below are always pulled in. |
+| `~/.claude/powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
+| `~/.claude/pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+
+## Skills to install
+
+Install into the user-level skills folder `~/.claude/skills/pester-migration/`. Create the
+directory tree if it does not exist.
+
+| Source file | Target path |
+|---|---|
+| `SKILL.md` | `~/.claude/skills/pester-migration/SKILL.md` |
+| `references/v3-to-v4.md` | `~/.claude/skills/pester-migration/references/v3-to-v4.md` |
+| `references/v4-to-v5.md` | `~/.claude/skills/pester-migration/references/v4-to-v5.md` |
+| `references/v5-to-v6.md` | `~/.claude/skills/pester-migration/references/v5-to-v6.md` |
+
+Write skill files verbatim from upstream. Do NOT strip or add frontmatter - `SKILL.md`'\''s own
+`name`/`description` frontmatter is how Claude Code identifies and surfaces the skill, so it must
+survive the copy unchanged.
+
+## Requirements
+
+- `~/.claude/CLAUDE.md` and the two imported fragments (`powershell.md`, `pester.md`) are plain
+  markdown - no frontmatter. Claude Code'\''s CLAUDE.md has no `applyTo`-style glob scoping, so don'\''t
+  try to recreate one; the fragments are simply always-imported, not conditionally loaded.
+- After fetching each instruction source URL, strip its existing frontmatter (if any) before
+  inserting the remaining body content into its target fragment file.
+- If `~/.claude/CLAUDE.md` already exists, merge new source content without overwriting
+  project-specific priorities. The conflict resolution priority must remain: project-level
+  instructions (a repo'\''s own `CLAUDE.md`) > this file > externally referenced docs.
+- After creating/updating the files, list them and confirm their paths.
+- If the source URLs are unreachable, stop and report the error; do not create empty instruction
+  files.
 '
 
     if [[ "$(uname -s)" == 'Darwin' ]]; then
