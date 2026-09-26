@@ -57,7 +57,7 @@ fish>
 
 - `New-Credential` / `new_credential` — interactive credential prompt, cross-platform
 - `Get-IPAddress` / `get_ip_address` — lists non-loopback IPv4 addresses
-- `gai` — copies AI instruction URLs to clipboard for use with GitHub Copilot
+- `Get-AgentInstructions` / `gai` — copies an installer prompt to the clipboard that sets up global user-level agent instructions and skills under `~/.agents/` (harness-agnostic, with pointers for Copilot, Claude Code, and `AGENTS.md`-based agents)
 - `New-Function` — scaffolds a new PowerShell function file with comment-based help
 
 ### Auto-Update
