@@ -1,5 +1,5 @@
 # dotzshrc
-# Version 2026.9.260743
+# Version 2026.9.260801
 # https://github.com/jakehildreth/profile/profiles/dotzshrc
 
 #region Self-Update
@@ -114,22 +114,27 @@ get_ip_address() {
 # gai — copy global agent instruction installer prompt to clipboard
 gai() {
     local prompt='---
-description: "Install or update Jake'\''s global user-level agent instructions and skills from raw URLs"
-version: "2026.9.260735"
+description: "Install or update Jake'\''s global user-level agent instructions, agents, and skills from raw URLs"
+version: "2026.9.260801"
 ---
 
-# Install Global Agent Instructions and Skills
+# Install Global Agent Instructions, Agents, and Skills
 
-Create or update my user-level agent instruction files so they apply automatically to every
-workspace, regardless of which agent, harness, or model I am using, without me having to paste
-URLs at the start of each chat. Also install the awesome-copilot pester-migration skill at user
-level.
+Create or update my user-level agent content so it applies automatically to every workspace,
+regardless of which agent, harness, or model I am using, without me having to paste URLs at the
+start of each chat.
 
-## Source URLs to fetch
+## Instruction source URLs to fetch
 
 1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
 2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
 3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
+4. **C# best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/instructions/csharp.instructions.md`
+
+## Agent source URLs to fetch
+
+1. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/CSharpExpert.agent.md`
+2. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/csharp-dotnet-janitor.agent.md`
 
 ## Skill source URLs to fetch
 
@@ -137,6 +142,7 @@ level.
 2. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v3-to-v4.md`
 3. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v4-to-v5.md`
 4. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v5-to-v6.md`
+5. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/skills/csharp-docs/SKILL.md`
 
 ## Target location
 
@@ -144,23 +150,36 @@ Create the directory tree if it does not exist:
 
 ```
 ~/.agents/instructions/
+~/.agents/agents/
 ~/.agents/skills/pester-migration/references/
+~/.agents/skills/csharp-docs/
 ```
 
-`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The instruction
-files below are the single source of truth; per-harness locations (next section) point at them
-instead of holding their own copies.
+`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The files below
+are the single source of truth; per-harness locations (next section) point at them instead of
+holding their own copies.
 
-## Files to create/update in `~/.agents/instructions/`
+## Instruction files to create/update in `~/.agents/instructions/`
 
 | File | Content |
 |---|---|
-| `personal.md` | Jake'\''s interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instruction files. |
+| `personal.md` | Jake'\''s interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the other instruction files. |
 | `powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
 | `pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+| `csharp.md` | C# development best practices. |
 
 These are plain markdown with NO frontmatter. Harness-specific `applyTo` scoping lives only in the
 per-harness pointer files, not here.
+
+## Agent files to create/update in `~/.agents/agents/`
+
+| File | Content |
+|---|---|
+| `CSharpExpert.agent.md` | C# Expert agent: expert C#/.NET development assistance. |
+| `csharp-dotnet-janitor.agent.md` | C#/.NET Janitor agent: cleanup, modernization, and tech debt remediation for C#/.NET codebases. |
+
+Write agent files verbatim from upstream, frontmatter included. Do NOT strip, add, or modify
+anything.
 
 ## Per-harness pointer files
 
@@ -171,48 +190,50 @@ them; otherwise create the small pointer files described below.
 
 | Harness | Pointer location | Pointer content |
 |---|---|---|
-| Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md` import lines. |
-| VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester) and a body that references the matching `~/.agents/instructions/` file. |
-| Any harness supporting `AGENTS.md` | `~/AGENTS.md` | Markdown that includes or references the three `~/.agents/instructions/` files. |
+| Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
+| Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
+| VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
+| Any harness supporting `AGENTS.md` | `~/AGENTS.md` | Markdown that includes or references the four `~/.agents/instructions/` files. |
 
 Do NOT overwrite existing non-pointer content in `~/.claude/CLAUDE.md` or `~/AGENTS.md`; merge or
 append around it.
 
 ## Skills to install
 
-Install into the canonical skills folder `~/.agents/skills/pester-migration/`.
+Install into the canonical skills folder under `~/.agents/skills/`.
 
 | Source file | Target path |
 |---|---|
-| `SKILL.md` | `~/.agents/skills/pester-migration/SKILL.md` |
-| `references/v3-to-v4.md` | `~/.agents/skills/pester-migration/references/v3-to-v4.md` |
-| `references/v4-to-v5.md` | `~/.agents/skills/pester-migration/references/v4-to-v5.md` |
-| `references/v5-to-v6.md` | `~/.agents/skills/pester-migration/references/v5-to-v6.md` |
+| `pester-migration/SKILL.md` | `~/.agents/skills/pester-migration/SKILL.md` |
+| `pester-migration/references/v3-to-v4.md` | `~/.agents/skills/pester-migration/references/v3-to-v4.md` |
+| `pester-migration/references/v4-to-v5.md` | `~/.agents/skills/pester-migration/references/v4-to-v5.md` |
+| `pester-migration/references/v5-to-v6.md` | `~/.agents/skills/pester-migration/references/v5-to-v6.md` |
+| `csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
 
 Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'\''s own
 `name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
 unchanged.
 
-For each installed harness with its own skills directory, symlink that directory'\''s
-`pester-migration` entry to `~/.agents/skills/pester-migration/` (or copy the files if the
-harness cannot follow symlinks):
+For each installed harness with its own skills directory, symlink that directory'\''s skill entries
+to the matching `~/.agents/skills/` folder (or copy the files if the harness cannot follow
+symlinks):
 
-| Harness | Skills location |
+| Harness | Skills locations |
 |---|---|
-| Claude Code | `~/.claude/skills/pester-migration/` |
-| VS Code Copilot | `~/.copilot/skills/pester-migration/` |
+| Claude Code | `~/.claude/skills/pester-migration/`, `~/.claude/skills/csharp-docs/` |
+| VS Code Copilot | `~/.copilot/skills/pester-migration/`, `~/.copilot/skills/csharp-docs/` |
 
 ## Requirements
 
-- After fetching each instruction source URL, strip its existing frontmatter (if any) before
+- After fetching each INSTRUCTION source URL, strip its existing frontmatter (if any) before
   inserting the remaining body content into the canonical `~/.agents/instructions/` files.
+- Agent files and skill files are copied verbatim; do not strip their frontmatter.
 - If a target file already exists, merge new source content without overwriting project-specific
   priorities. The conflict resolution priority must remain: project-level instructions (a repo'\''s
   own `AGENTS.md`/`CLAUDE.md`/`.instructions.md`) > these user-level files > externally
   referenced docs.
 - After creating/updating the files, list them and confirm their paths.
-- If the source URLs are unreachable, stop and report the error; do not create empty instruction
-  files.
+- If the source URLs are unreachable, stop and report the error; do not create empty files.
 '
 
     if [[ "$(uname -s)" == 'Darwin' ]]; then
