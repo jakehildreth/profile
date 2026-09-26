@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.9.260823
+# Version 2026.9.260839
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -154,7 +154,7 @@ function Get-AgentInstructions {
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.9.260823"
+version: "2026.9.260839"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
@@ -210,6 +210,18 @@ File lists change upstream; that is why enumeration happens at install time inst
 file table here. If the API call fails (rate limit, offline), stop and report it; do not guess
 file names.
 
+Jake's own skills (repo: `jakehildreth/jakehildreth`, branch `main`) - install these 4 skills:
+
+```
+conference-talk-summary new-linkedin-post talk-developer writing-voice
+```
+
+Same enumeration pattern: one GitHub API tree call
+(`https://api.github.com/repos/jakehildreth/jakehildreth/git/trees/main?recursive=1`), filter to
+`skills/<name>/`, fetch every file from
+`https://raw.githubusercontent.com/jakehildreth/jakehildreth/main/<path>` and write it to
+`~/.agents/skills/<name>/`. Same failure rule: if the API call fails, stop and report it.
+
 ## Target location
 
 Create the directory tree if it does not exist:
@@ -258,7 +270,7 @@ them; otherwise create the small pointer files described below.
 | Harness | Pointer location | Pointer content |
 |---|---|---|
 | omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
-| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (the 25 Matt Pocock skills, `pester-migration/`, `csharp-docs/`). |
+| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (the 25 Matt Pocock skills, Jake's 4 skills, `pester-migration/`, `csharp-docs/`). |
 | Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
 | Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
 | VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
@@ -276,6 +288,7 @@ All skills install under `~/.agents/skills/<name>/`:
 | `pester-migration` | awesome-copilot, 4 files listed above (SKILL.md + 3 references) | `~/.agents/skills/pester-migration/` |
 | `csharp-docs` | awesome-copilot, `skills/csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
 | 25 Matt Pocock skills | `mattpocock/skills`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
+| 4 Jake skills | `jakehildreth/jakehildreth`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
 
 Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'s own
 `name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
@@ -301,8 +314,9 @@ For each installed harness with its own skills directory, symlink EVERY skill in
   referenced docs.
 - After creating/updating the files, list them and confirm their paths.
 - If the source URLs are unreachable, stop and report the error; do not create empty files.
-- The GitHub API tree call for `mattpocock/skills` is the source of truth for those skills' file
-  lists. If it fails (rate limit, offline), stop and report it; do not guess file names.
+- The GitHub API tree calls (`mattpocock/skills`, `jakehildreth/jakehildreth`) are the source of
+  truth for those skills' file lists. If either fails (rate limit, offline), stop and report it;
+  do not guess file names.
 
 '@ | Set-Clipboard
 }
