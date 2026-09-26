@@ -1,5 +1,5 @@
 # dotbashrc
-# Version 2026.9.260812
+# Version 2026.9.260823
 # https://github.com/jakehildreth/profile/profiles/dotbashrc
 
 #region Self-Update
@@ -99,7 +99,7 @@ get_ip_address() {
 gai() {
     local prompt='---
 description: "Install or update Jake'\''s global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.9.260812"
+version: "2026.9.260823"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
@@ -122,11 +122,38 @@ start of each chat.
 
 ## Skill source URLs to fetch
 
-1. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/SKILL.md`
-2. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v3-to-v4.md`
-3. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v4-to-v5.md`
-4. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v5-to-v6.md`
-5. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/skills/csharp-docs/SKILL.md`
+awesome-copilot skills (base: `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/`):
+
+1. `skills/pester-migration/SKILL.md`
+2. `skills/pester-migration/references/v3-to-v4.md`
+3. `skills/pester-migration/references/v4-to-v5.md`
+4. `skills/pester-migration/references/v5-to-v6.md`
+5. `skills/csharp-docs/SKILL.md`
+
+Matt Pocock'\''s skills (repo: `mattpocock/skills`, branch `main`) - install these 25 skills ONLY
+(the engineering and productivity categories; do NOT install anything from `misc/`,
+`deprecated/`, or `in-progress/`):
+
+```
+ask-matt code-review codebase-design diagnosing-bugs domain-modeling grill-me grill-with-docs
+grilling handoff implement improve-codebase-architecture prototype research
+resolving-merge-conflicts setup-matt-pocock-skills tdd teach to-questionnaire to-spec to-tickets
+triage wait-what wayfinder wizard writing-for-agents
+```
+
+For EACH skill in that list:
+
+1. Enumerate its files via the GitHub API:
+   `https://api.github.com/repos/mattpocock/skills/git/trees/main?recursive=1`
+   (one call for the whole repo; filter to paths under `skills/engineering/<name>/` or
+   `skills/productivity/<name>/` - a skill lives in whichever category directory contains it).
+2. Fetch every file under the skill'\''s directory from
+   `https://raw.githubusercontent.com/mattpocock/skills/main/<path>` and write it to
+   `~/.agents/skills/<name>/<path-relative-to-skill-dir>`.
+
+File lists change upstream; that is why enumeration happens at install time instead of a fixed
+file table here. If the API call fails (rate limit, offline), stop and report it; do not guess
+file names.
 
 ## Target location
 
@@ -139,9 +166,10 @@ Create the directory tree if it does not exist:
 ~/.agents/skills/csharp-docs/
 ```
 
-`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The files below
-are the single source of truth; per-harness locations (next section) point at them instead of
-holding their own copies.
+`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The instruction
+and agent files below are the single source of truth; per-harness locations (next section) point
+at them instead of holding their own copies. Skill directories are created by the skill fetch
+steps above.
 
 ## Instruction files to create/update in `~/.agents/instructions/`
 
@@ -175,7 +203,7 @@ them; otherwise create the small pointer files described below.
 | Harness | Pointer location | Pointer content |
 |---|---|---|
 | omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
-| omp | `~/.omp/agent/skills/` | Symlink (or copy) `pester-migration/` and `csharp-docs/` from `~/.agents/skills/`. |
+| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (the 25 Matt Pocock skills, `pester-migration/`, `csharp-docs/`). |
 | Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
 | Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
 | VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
@@ -186,29 +214,26 @@ append around it.
 
 ## Skills to install
 
-Install into the canonical skills folder under `~/.agents/skills/`.
+All skills install under `~/.agents/skills/<name>/`:
 
-| Source file | Target path |
-|---|---|
-| `pester-migration/SKILL.md` | `~/.agents/skills/pester-migration/SKILL.md` |
-| `pester-migration/references/v3-to-v4.md` | `~/.agents/skills/pester-migration/references/v3-to-v4.md` |
-| `pester-migration/references/v4-to-v5.md` | `~/.agents/skills/pester-migration/references/v4-to-v5.md` |
-| `pester-migration/references/v5-to-v6.md` | `~/.agents/skills/pester-migration/references/v5-to-v6.md` |
-| `csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
+| Skill | Source | Target |
+|---|---|---|
+| `pester-migration` | awesome-copilot, 4 files listed above (SKILL.md + 3 references) | `~/.agents/skills/pester-migration/` |
+| `csharp-docs` | awesome-copilot, `skills/csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
+| 25 Matt Pocock skills | `mattpocock/skills`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
 
 Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'\''s own
 `name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
 unchanged.
 
-For each installed harness with its own skills directory, symlink that directory'\''s skill entries
-to the matching `~/.agents/skills/` folder (or copy the files if the harness cannot follow
-symlinks):
+For each installed harness with its own skills directory, symlink EVERY skill in
+`~/.agents/skills/` into it (or copy the files if the harness cannot follow symlinks):
 
-| Harness | Skills locations |
+| Harness | Skills location |
 |---|---|
-| omp | `~/.omp/agent/skills/pester-migration/`, `~/.omp/agent/skills/csharp-docs/` |
-| Claude Code | `~/.claude/skills/pester-migration/`, `~/.claude/skills/csharp-docs/` |
-| VS Code Copilot | `~/.copilot/skills/pester-migration/`, `~/.copilot/skills/csharp-docs/` |
+| omp | `~/.omp/agent/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| VS Code Copilot | `~/.copilot/skills/` |
 
 ## Requirements
 
@@ -221,6 +246,8 @@ symlinks):
   referenced docs.
 - After creating/updating the files, list them and confirm their paths.
 - If the source URLs are unreachable, stop and report the error; do not create empty files.
+- The GitHub API tree call for `mattpocock/skills` is the source of truth for those skills'\'' file
+  lists. If it fails (rate limit, offline), stop and report it; do not guess file names.
 '
 
     if [[ "$(uname -s)" == 'Darwin' ]]; then
