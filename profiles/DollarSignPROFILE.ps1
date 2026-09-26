@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.9.260801
+# Version 2026.9.260812
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -154,7 +154,7 @@ function Get-AgentInstructions {
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.9.260801"
+version: "2026.9.260812"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
@@ -229,6 +229,8 @@ them; otherwise create the small pointer files described below.
 
 | Harness | Pointer location | Pointer content |
 |---|---|---|
+| omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
+| omp | `~/.omp/agent/skills/` | Symlink (or copy) `pester-migration/` and `csharp-docs/` from `~/.agents/skills/`. |
 | Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
 | Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
 | VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
@@ -259,6 +261,7 @@ symlinks):
 
 | Harness | Skills locations |
 |---|---|
+| omp | `~/.omp/agent/skills/pester-migration/`, `~/.omp/agent/skills/csharp-docs/` |
 | Claude Code | `~/.claude/skills/pester-migration/`, `~/.claude/skills/csharp-docs/` |
 | VS Code Copilot | `~/.copilot/skills/pester-migration/`, `~/.copilot/skills/csharp-docs/` |
 
