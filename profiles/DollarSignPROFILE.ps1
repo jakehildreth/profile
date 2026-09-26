@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.8.170900
+# Version 2026.9.260743
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -148,80 +148,21 @@ function Get-IPAddress {
     }
 }
 
-function gai {
-    @'
----
-description: "Install or update Jake's global user-level Copilot instructions and skills from raw URLs"
-version: "2026.8.160900"
----
-
-# Install Global Copilot Instructions and Skills
-
-Create or update my user-level VS Code Copilot instruction files so they apply automatically to every workspace without me having to paste URLs at the start of each chat. Also install the awesome-copilot pester-migration skill at user level.
-
-## Source URLs to fetch
-
-1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
-2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
-3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
-
-## Skill source URLs to fetch
-
-1. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/SKILL.md`
-2. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v3-to-v4.md`
-3. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v4-to-v5.md`
-4. `https://raw.githubusercontent.com/github/awesome-copilot/main/skills/pester-migration/references/v5-to-v6.md`
-
-## Target location
-
-Create the directory if it does not exist: `~/.copilot/instructions/`.
-
-This is the user-level folder where VS Code, Copilot CLI, and other harnesses load `.instructions.md` files.
-
-## Files to create/update
-
-| File | applyTo | Content |
-|---|---|---|
-| `personal.instructions.md` | `**/*` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instructions. |
-| `powershell.instructions.md` | `**/*.ps1,**/*.psm1` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
-| `pester.instructions.md` | `**/*.Tests.ps1` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
-
-## Skills to install
-
-Install into the user-level skills folder `~/.copilot/skills/pester-migration/`. Create the directory tree if it does not exist.
-
-| Source file | Target path |
-|---|---|
-| `SKILL.md` | `~/.copilot/skills/pester-migration/SKILL.md` |
-| `references/v3-to-v4.md` | `~/.copilot/skills/pester-migration/references/v3-to-v4.md` |
-| `references/v4-to-v5.md` | `~/.copilot/skills/pester-migration/references/v4-to-v5.md` |
-| `references/v5-to-v6.md` | `~/.copilot/skills/pester-migration/references/v5-to-v6.md` |
-
-Write skill files verbatim from upstream. Do NOT strip or add frontmatter. Do NOT modify the content in any way.
-
-## Requirements
-
-- Add YAML frontmatter with `applyTo` and `description` fields to each generated instruction file.
-- After fetching each instruction source URL, strip its existing frontmatter (if any) before inserting the remaining body content.
-- If `personal.instructions.md` already exists, merge new source content without overwriting project-specific priorities. The conflict resolution priority in the personal file must remain: project-level instructions > this file > external referenced docs.
-- After creating/updating the files, list them and confirm their paths.
-- If the source URLs are unreachable, stop and report the error; do not create empty instruction files.
-
-'@ | Set-Clipboard
-}
-
-function cci {
+function Get-AgentInstructions {
+    [Alias('gai')]
+    param()
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions and skills from raw URLs"
-version: "2026.8.281519"
+version: "2026.9.260735"
 ---
 
-# Install Global Claude Code Instructions and Skills
+# Install Global Agent Instructions and Skills
 
 Create or update my user-level agent instruction files so they apply automatically to every
-workspace without me having to paste URLs at the start of each chat. Also install the
-awesome-copilot pester-migration skill at user level.
+workspace, regardless of which agent, harness, or model I am using, without me having to paste
+URLs at the start of each chat. Also install the awesome-copilot pester-migration skill at user
+level.
 
 ## Source URLs to fetch
 
@@ -238,61 +179,80 @@ awesome-copilot pester-migration skill at user level.
 
 ## Target location
 
-Create the directory `~/.claude/` if it does not exist, and within it the file `CLAUDE.md` if it
-does not exist. Claude Code loads `~/.claude/CLAUDE.md` automatically at the start of every
-session, in every workspace, with no per-file-type scoping - unlike Copilot's `applyTo`-glob
-`.instructions.md` files, everything in it is always in context regardless of what you're editing.
-To keep the PowerShell/Pester content separately updatable without losing that always-on
-behavior, split it into imported fragments using Claude Code's `@path` import syntax from within
-`CLAUDE.md`.
+Create the directory tree if it does not exist:
 
-## Files to create/update
+```
+~/.agents/instructions/
+~/.agents/skills/pester-migration/references/
+```
+
+`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The instruction
+files below are the single source of truth; per-harness locations (next section) point at them
+instead of holding their own copies.
+
+## Files to create/update in `~/.agents/instructions/`
 
 | File | Content |
 |---|---|
-| `~/.claude/CLAUDE.md` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow - plus `@powershell.md` and `@pester.md` import lines so the two language-specific fragments below are always pulled in. |
-| `~/.claude/powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
-| `~/.claude/pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+| `personal.md` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the PowerShell and Pester instruction files. |
+| `powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
+| `pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
+
+These are plain markdown with NO frontmatter. Harness-specific `applyTo` scoping lives only in the
+per-harness pointer files, not here.
+
+## Per-harness pointer files
+
+Wire each installed harness to the canonical files. Create a pointer ONLY for harnesses already
+installed or configured on this machine; do not create directories for harnesses I do not use.
+Prefer symlinks from the harness location to the `~/.agents/` files where the harness supports
+them; otherwise create the small pointer files described below.
+
+| Harness | Pointer location | Pointer content |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md` import lines. |
+| VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester) and a body that references the matching `~/.agents/instructions/` file. |
+| Any harness supporting `AGENTS.md` | `~/AGENTS.md` | Markdown that includes or references the three `~/.agents/instructions/` files. |
+
+Do NOT overwrite existing non-pointer content in `~/.claude/CLAUDE.md` or `~/AGENTS.md`; merge or
+append around it.
 
 ## Skills to install
 
-Install into the user-level skills folder `~/.claude/skills/pester-migration/`. Create the
-directory tree if it does not exist.
+Install into the canonical skills folder `~/.agents/skills/pester-migration/`.
 
 | Source file | Target path |
 |---|---|
-| `SKILL.md` | `~/.claude/skills/pester-migration/SKILL.md` |
-| `references/v3-to-v4.md` | `~/.claude/skills/pester-migration/references/v3-to-v4.md` |
-| `references/v4-to-v5.md` | `~/.claude/skills/pester-migration/references/v4-to-v5.md` |
-| `references/v5-to-v6.md` | `~/.claude/skills/pester-migration/references/v5-to-v6.md` |
+| `SKILL.md` | `~/.agents/skills/pester-migration/SKILL.md` |
+| `references/v3-to-v4.md` | `~/.agents/skills/pester-migration/references/v3-to-v4.md` |
+| `references/v4-to-v5.md` | `~/.agents/skills/pester-migration/references/v4-to-v5.md` |
+| `references/v5-to-v6.md` | `~/.agents/skills/pester-migration/references/v5-to-v6.md` |
 
-Write skill files verbatim from upstream. Do NOT strip or add frontmatter - `SKILL.md`'s own
-`name`/`description` frontmatter is how Claude Code identifies and surfaces the skill, so it must
-survive the copy unchanged.
+Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'s own
+`name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
+unchanged.
+
+For each installed harness with its own skills directory, symlink that directory's
+`pester-migration` entry to `~/.agents/skills/pester-migration/` (or copy the files if the
+harness cannot follow symlinks):
+
+| Harness | Skills location |
+|---|---|
+| Claude Code | `~/.claude/skills/pester-migration/` |
+| VS Code Copilot | `~/.copilot/skills/pester-migration/` |
 
 ## Requirements
 
-- `~/.claude/CLAUDE.md` and the two imported fragments (`powershell.md`, `pester.md`) are plain
-  markdown - no frontmatter. Claude Code's CLAUDE.md has no `applyTo`-style glob scoping, so don't
-  try to recreate one; the fragments are simply always-imported, not conditionally loaded.
 - After fetching each instruction source URL, strip its existing frontmatter (if any) before
-  inserting the remaining body content into its target fragment file.
-- If `~/.claude/CLAUDE.md` already exists, merge new source content without overwriting
-  project-specific priorities. The conflict resolution priority must remain: project-level
-  instructions (a repo's own `CLAUDE.md`) > this file > externally referenced docs.
+  inserting the remaining body content into the canonical `~/.agents/instructions/` files.
+- If a target file already exists, merge new source content without overwriting project-specific
+  priorities. The conflict resolution priority must remain: project-level instructions (a repo's
+  own `AGENTS.md`/`CLAUDE.md`/`.instructions.md`) > these user-level files > externally
+  referenced docs.
 - After creating/updating the files, list them and confirm their paths.
 - If the source URLs are unreachable, stop and report the error; do not create empty instruction
   files.
+
 '@ | Set-Clipboard
 }
 
-function dcc {
-    @'
-Compare the current state of this project against its most recent commit.
-Using the diff, draft a conventional commit following my standards, and present it to me for approval.
-If I approve the commit message, commit the changes & push them.
-If the current branch is not main, ask me if I want to do a PR.
-If I say yes, draft a pull request title and description, then return the title and description as separate copy-pastable blocks.
-If I say no, tell me you're ready for the next task. In a robot style.
-'@ | Set-Clipboard
-}
