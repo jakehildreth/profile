@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.9.260839
+# Version 2026.10.61043
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -185,30 +185,24 @@ awesome-copilot skills (base: `https://raw.githubusercontent.com/github/awesome-
 4. `skills/pester-migration/references/v5-to-v6.md`
 5. `skills/csharp-docs/SKILL.md`
 
-Matt Pocock's skills (repo: `mattpocock/skills`, branch `main`) - install these 25 skills ONLY
-(the engineering and productivity categories; do NOT install anything from `misc/`,
-`deprecated/`, or `in-progress/`):
+Matt Pocock's skills (repo: `mattpocock/skills`, branch `main`) - install EVERY skill found in
+the `skills/engineering/` and `skills/productivity/` categories (do NOT install anything from
+`misc/`, `deprecated/`, or `in-progress/`). Do NOT hardcode a skill list; the tree is the source
+of truth.
 
-```
-ask-matt code-review codebase-design diagnosing-bugs domain-modeling grill-me grill-with-docs
-grilling handoff implement improve-codebase-architecture prototype research
-resolving-merge-conflicts setup-matt-pocock-skills tdd teach to-questionnaire to-spec to-tickets
-triage wait-what wayfinder wizard writing-for-agents
-```
+Enumeration and install:
 
-For EACH skill in that list:
-
-1. Enumerate its files via the GitHub API:
+1. Enumerate the repo via one GitHub API call:
    `https://api.github.com/repos/mattpocock/skills/git/trees/main?recursive=1`
-   (one call for the whole repo; filter to paths under `skills/engineering/<name>/` or
-   `skills/productivity/<name>/` - a skill lives in whichever category directory contains it).
-2. Fetch every file under the skill's directory from
+2. From the tree, derive the skill list: every `tree`-type entry at depth 3 whose path matches
+   `skills/engineering/<name>` or `skills/productivity/<name>` is a skill named `<name>`.
+3. For EACH discovered skill, fetch every `blob` under its directory from
    `https://raw.githubusercontent.com/mattpocock/skills/main/<path>` and write it to
    `~/.agents/skills/<name>/<path-relative-to-skill-dir>`.
 
-File lists change upstream; that is why enumeration happens at install time instead of a fixed
-file table here. If the API call fails (rate limit, offline), stop and report it; do not guess
-file names.
+File lists and skill names change upstream; that is why enumeration happens at install time
+instead of a fixed file table or skill list here. If the API call fails (rate limit, offline),
+stop and report it; do not guess skill or file names.
 
 Jake's own skills (repo: `jakehildreth/jakehildreth`, branch `main`) - install these 4 skills:
 
@@ -270,7 +264,7 @@ them; otherwise create the small pointer files described below.
 | Harness | Pointer location | Pointer content |
 |---|---|---|
 | omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
-| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (the 25 Matt Pocock skills, Jake's 4 skills, `pester-migration/`, `csharp-docs/`). |
+| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (all Matt Pocock engineering/productivity skills, Jake's 4 skills, `pester-migration/`, `csharp-docs/`). |
 | Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
 | Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
 | VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
@@ -287,7 +281,7 @@ All skills install under `~/.agents/skills/<name>/`:
 |---|---|---|
 | `pester-migration` | awesome-copilot, 4 files listed above (SKILL.md + 3 references) | `~/.agents/skills/pester-migration/` |
 | `csharp-docs` | awesome-copilot, `skills/csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
-| 25 Matt Pocock skills | `mattpocock/skills`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
+| All Matt Pocock engineering/productivity skills | `mattpocock/skills`, skills and files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
 | 4 Jake skills | `jakehildreth/jakehildreth`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
 
 Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'s own
