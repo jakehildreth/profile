@@ -154,7 +154,7 @@ function Get-AgentInstructions {
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.9.260839"
+version: "2026.10.61043"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
