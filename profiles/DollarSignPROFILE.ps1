@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.10.262227
+# Version 2026.10.262245
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -148,195 +148,397 @@ function Get-IPAddress {
     }
 }
 
-function Get-AgentInstructions {
+function Install-AgentContent {
     <#
     .SYNOPSIS
-        Install Jake's global agent instructions, agents, skills, and hooks.
+        Installs Jake's global agent instructions, agents, skills, and hooks.
+
+    .DESCRIPTION
+        Fetches instructions, agents, skills, and Copilot CLI hooks from their upstream repositories
+        into ~/.agents, then copies them into each agent harness directory that already exists
+        (~/.claude, ~/.omp/agent, ~/.copilot). Instructions are also written into a managed block in
+        ~/AGENTS.md and in each existing harness's own AGENTS.md or CLAUDE.md.
+
+        Each source is fetched into a temporary directory and applied only if every download
+        succeeded, so one failing source never blocks the others. A file whose content would change
+        is first copied to <name>.bak.<yyyyMMddHHmmss>. Nothing is ever deleted.
+
+    .EXAMPLE
+        Install-AgentContent
+
+        Installs or updates everything and returns one result object per source.
+
+    .EXAMPLE
+        gai -WhatIf
+
+        Lists every file that would be written without changing anything. Sources are still
+        downloaded to a temporary directory, and the harness copy step reads the current
+        ~/.agents rather than the pending update.
+
+    .OUTPUTS
+        System.Management.Automation.PSCustomObject
+
+        One object per source with Source, Status, FilesWritten, and Message properties.
+
+    .NOTES
+        Requires network access to github.com and raw.githubusercontent.com. Unauthenticated GitHub
+        API calls are limited to 60 per hour per IP.
     #>
     [Alias('gai')]
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([pscustomobject])]
     param()
 
-    $ErrorActionPreference = 'Stop'
+    # Progress rendering makes Invoke-WebRequest very slow in Windows PowerShell 5.1.
     $ProgressPreference = 'SilentlyContinue'
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $state = @{ Changed = 0; Failed = $false; Ts = (Get-Date -Format 'yyyyMMddHHmmss') }
-    $agents = Join-Path $HOME '.agents'
-    $utf8 = New-Object Text.UTF8Encoding $false
+    $runState = @{ FilesWritten = 0; Timestamp = (Get-Date -Format 'yyyyMMddHHmmss') }
+    $agentsPath = Join-Path -Path $HOME -ChildPath '.agents'
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
-    function Save-Remote($url, $dest) {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
-        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 30
+    function Save-RemoteFile {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Uri,
+
+            [Parameter(Mandatory)]
+            [string]$Path
+        )
+
+        $null = New-Item -ItemType Directory -Path (Split-Path -Path $Path -Parent) -Force -WhatIf:$false -ErrorAction Stop
+        Invoke-WebRequest -Uri $Uri -OutFile $Path -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
     }
 
-    # Fetch an instruction file and strip its YAML frontmatter.
-    function Save-Instruction($url, $dest) {
-        $tmp = [IO.Path]::GetTempFileName()
+    # Downloads an instruction file and strips its YAML frontmatter.
+    function Save-InstructionFile {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Uri,
+
+            [Parameter(Mandatory)]
+            [string]$Path
+        )
+
+        $downloadPath = [System.IO.Path]::GetTempFileName()
         try {
-            Save-Remote $url $tmp
-            $lines = [IO.File]::ReadAllLines($tmp)
-            $i = 0
+            Save-RemoteFile -Uri $Uri -Path $downloadPath
+            $lines = [System.IO.File]::ReadAllLines($downloadPath)
+            $bodyStart = 0
             if ($lines.Count -gt 0 -and $lines[0] -match '^---\s*$') {
-                $i = 1
-                while ($i -lt $lines.Count -and $lines[$i] -notmatch '^---\s*$') { $i++ }
-                $i++
+                $bodyStart = 1
+                while ($bodyStart -lt $lines.Count -and $lines[$bodyStart] -notmatch '^---\s*$') {
+                    $bodyStart++
+                }
+                $bodyStart++
             }
-            $text = if ($i -lt $lines.Count) { ($lines[$i..($lines.Count - 1)] -join "`n") + "`n" } else { '' }
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
-            [IO.File]::WriteAllText($dest, $text, $utf8)
-        } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
-    }
-
-    # Copy src to dst; back dst up first when its content would change.
-    function Copy-IfChanged($src, $dst) {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
-        if (Test-Path -LiteralPath $dst) {
-            if ((Get-FileHash -LiteralPath $src).Hash -eq (Get-FileHash -LiteralPath $dst).Hash) { return }
-            Copy-Item -LiteralPath $dst -Destination "$dst.bak.$($state.Ts)"
+            $body = ''
+            if ($bodyStart -lt $lines.Count) {
+                $body = ($lines[$bodyStart..($lines.Count - 1)] -join "`n") + "`n"
+            }
+            $null = New-Item -ItemType Directory -Path (Split-Path -Path $Path -Parent) -Force -WhatIf:$false -ErrorAction Stop
+            [System.IO.File]::WriteAllText($Path, $body, $utf8NoBom)
+        } finally {
+            Remove-Item -LiteralPath $downloadPath -Force -WhatIf:$false -ErrorAction SilentlyContinue
         }
-        Copy-Item -LiteralPath $src -Destination $dst
-        if ($dst -like '*.sh' -and $PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { chmod +x $dst }
-        $state.Changed++
     }
 
-    # shortcut: Get-ChildItem -Recurse does not follow directory symlinks on Windows PowerShell 5.1.
-    function Copy-Tree($srcDir, $dstDir) {
-        if (-not (Test-Path -LiteralPath $srcDir -PathType Container)) { return }
-        $root = (Resolve-Path -LiteralPath $srcDir).ProviderPath.TrimEnd('\', '/')
-        Get-ChildItem -LiteralPath $root -Recurse -File -Force |
-            Where-Object { $_.Name -notlike '*.bak.*' -and $_.Name -ne '.DS_Store' } |
-            ForEach-Object { Copy-IfChanged $_.FullName (Join-Path $dstDir $_.FullName.Substring($root.Length).TrimStart('\', '/')) }
+    # Copies Source over Destination, backing Destination up first when its content would change.
+    function Copy-FileIfChanged {
+        [CmdletBinding(SupportsShouldProcess)]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Source,
+
+            [Parameter(Mandatory)]
+            [string]$Destination
+        )
+
+        $destinationExists = Test-Path -LiteralPath $Destination
+        if ($destinationExists -and (Get-FileHash -LiteralPath $Source -ErrorAction Stop).Hash -eq (Get-FileHash -LiteralPath $Destination -ErrorAction Stop).Hash) {
+            return
+        }
+        if (-not $PSCmdlet.ShouldProcess($Destination, 'Write file')) {
+            return
+        }
+        $null = New-Item -ItemType Directory -Path (Split-Path -Path $Destination -Parent) -Force -ErrorAction Stop
+        if ($destinationExists) {
+            Copy-Item -LiteralPath $Destination -Destination "$Destination.bak.$($runState.Timestamp)" -ErrorAction Stop
+        }
+        Copy-Item -LiteralPath $Source -Destination $Destination -ErrorAction Stop
+        if ($Destination -like '*.sh' -and $PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
+            chmod +x $Destination
+        }
+        $runState.FilesWritten++
     }
 
-    # Replace (or append) the managed block in a shared markdown file.
-    function Set-Block($target, $body) {
-        $block = "<!-- BEGIN gai (managed block; edits here are overwritten) -->`n$body`n<!-- END gai -->`n"
-        $existing = if (Test-Path -LiteralPath $target) { [IO.File]::ReadAllText($target) } else { $null }
-        if ($null -eq $existing) {
-            $new = $block
-        } else {
-            $b = $existing.IndexOf('<!-- BEGIN gai')
-            if ($b -ge 0) {
-                $e = $existing.IndexOf('<!-- END gai -->', $b)
-                $eol = if ($e -ge 0) { $existing.IndexOf("`n", $e) } else { -1 }
-                $tail = if ($e -ge 0 -and $eol -ge 0) { $existing.Substring($eol + 1) } else { '' }
-                $new = $existing.Substring(0, $b) + $block + $tail
+    # shortcut: Get-ChildItem -Recurse does not follow directory symlinks in Windows PowerShell 5.1; upgrade if a source tree ever contains one.
+    function Copy-FileTree {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$SourceDirectory,
+
+            [Parameter(Mandatory)]
+            [string]$DestinationDirectory
+        )
+
+        if (-not (Test-Path -LiteralPath $SourceDirectory -PathType Container)) {
+            return
+        }
+        $rootPath = (Resolve-Path -LiteralPath $SourceDirectory -ErrorAction Stop).ProviderPath.TrimEnd('\', '/')
+        Get-ChildItem -LiteralPath $rootPath -Recurse -File -Force -ErrorAction Stop |
+            Where-Object -FilterScript { $_.Name -notlike '*.bak.*' -and $_.Name -ne '.DS_Store' } |
+            ForEach-Object -Process {
+                $relativePath = $_.FullName.Substring($rootPath.Length).TrimStart('\', '/')
+                Copy-FileIfChanged -Source $_.FullName -Destination (Join-Path -Path $DestinationDirectory -ChildPath $relativePath)
+            }
+    }
+
+    # Replaces (or appends) the managed block in a shared markdown file.
+    function Write-ManagedBlock {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Path,
+
+            [Parameter(Mandatory)]
+            [string]$Body
+        )
+
+        $block = "<!-- BEGIN gai (managed block; edits here are overwritten) -->`n$Body`n<!-- END gai -->`n"
+        if (Test-Path -LiteralPath $Path) {
+            $existing = [System.IO.File]::ReadAllText($Path)
+            $blockStart = $existing.IndexOf('<!-- BEGIN gai')
+            if ($blockStart -ge 0) {
+                $blockEnd = $existing.IndexOf('<!-- END gai -->', $blockStart)
+                $lineEnd = if ($blockEnd -ge 0) { $existing.IndexOf("`n", $blockEnd) } else { -1 }
+                $tail = if ($lineEnd -ge 0) { $existing.Substring($lineEnd + 1) } else { '' }
+                $newContent = $existing.Substring(0, $blockStart) + $block + $tail
             } else {
-                $new = $existing + "`n" + $block
+                $newContent = $existing + "`n" + $block
+            }
+        } else {
+            $newContent = $block
+        }
+        $stagedPath = [System.IO.Path]::GetTempFileName()
+        try {
+            [System.IO.File]::WriteAllText($stagedPath, $newContent, $utf8NoBom)
+            Copy-FileIfChanged -Source $stagedPath -Destination $Path
+        } finally {
+            Remove-Item -LiteralPath $stagedPath -Force -WhatIf:$false -ErrorAction SilentlyContinue
+        }
+    }
+
+    # shortcut: a truncated tree fails the source instead of being paged through; upgrade if a source repo outgrows one API response.
+    function Save-RepositoryFile {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Repository,
+
+            [Parameter(Mandatory)]
+            [scriptblock]$Select,
+
+            [Parameter(Mandatory)]
+            [string]$DestinationDirectory
+        )
+
+        $tree = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/git/trees/HEAD?recursive=1" -Headers @{ Accept = 'application/vnd.github+json' } -ErrorAction Stop
+        if ($tree.truncated -ne $false) {
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.InvalidOperationException]::new("The $Repository tree is truncated."),
+                'TreeTruncated',
+                [System.Management.Automation.ErrorCategory]::InvalidResult,
+                $Repository
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
+        }
+        $selected = @($tree.tree |
+            Where-Object -Property type -EQ -Value 'blob' |
+            ForEach-Object -Process { & $Select $_.path } |
+            Where-Object -FilterScript { $_ })
+        if ($selected.Count -eq 0) {
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.InvalidOperationException]::new("No files matched in $Repository."),
+                'NoFilesMatched',
+                [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                $Repository
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
+        }
+        foreach ($file in $selected) {
+            Save-RemoteFile -Uri "https://raw.githubusercontent.com/$Repository/HEAD/$($file.SourcePath)" -Path (Join-Path -Path $DestinationDirectory -ChildPath $file.RelativePath)
+        }
+    }
+
+    # Fetches a source into a temporary directory and writes it to ~/.agents only if every download worked.
+    function Install-Source {
+        [CmdletBinding()]
+        [OutputType([pscustomobject])]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Name,
+
+            [Parameter(Mandatory)]
+            [scriptblock]$Fetch
+        )
+
+        $stagingPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([guid]::NewGuid().ToString())
+        $writtenBefore = $runState.FilesWritten
+        $status = 'Failed'
+        $message = ''
+        try {
+            $null = & $Fetch $stagingPath
+            Copy-FileTree -SourceDirectory $stagingPath -DestinationDirectory $agentsPath
+            $status = if ($WhatIfPreference) { 'WhatIf' } else { 'Installed' }
+        } catch {
+            $message = $_.Exception.Message
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $_.Exception,
+                'SourceInstallFailed',
+                [System.Management.Automation.ErrorCategory]::NotSpecified,
+                $Name
+            )
+            $PSCmdlet.WriteError($errorRecord)
+        } finally {
+            Remove-Item -LiteralPath $stagingPath -Recurse -Force -WhatIf:$false -ErrorAction SilentlyContinue
+        }
+        [pscustomobject]@{
+            Source       = $Name
+            Status       = $status
+            FilesWritten = $runState.FilesWritten - $writtenBefore
+            Message      = $message
+        }
+    }
+
+    $ownBaseUri = 'https://raw.githubusercontent.com/jakehildreth/jakehildreth/HEAD'
+    $awesomeBaseUri = 'https://raw.githubusercontent.com/github/awesome-copilot/HEAD'
+
+    Install-Source -Name 'jakehildreth: instructions, hooks, skills' -Fetch {
+        param($StagingPath)
+        Save-InstructionFile -Uri "$ownBaseUri/.github/copilot-instructions.md" -Path (Join-Path -Path $StagingPath -ChildPath 'instructions/personal.md')
+        foreach ($hookFile in 'no-ai-attribution.json', 'no-ai-attribution.sh', 'no-ai-attribution.ps1', 'no-squash-merge.json', 'no-squash-merge.sh', 'no-squash-merge.ps1') {
+            Save-RemoteFile -Uri "$ownBaseUri/hooks/$hookFile" -Path (Join-Path -Path $StagingPath -ChildPath "hooks/$hookFile")
+        }
+        Save-RepositoryFile -Repository 'jakehildreth/jakehildreth' -DestinationDirectory (Join-Path -Path $StagingPath -ChildPath 'skills') -Select {
+            param($RepositoryPath)
+            if ($RepositoryPath -cmatch '^skills/(conference-talk-summary|new-linkedin-post|talk-developer|writing-voice)/') {
+                @{ SourcePath = $RepositoryPath; RelativePath = $RepositoryPath.Substring(7) }
             }
         }
-        $tmp = [IO.Path]::GetTempFileName()
-        try {
-            [IO.File]::WriteAllText($tmp, $new, $utf8)
-            Copy-IfChanged $tmp $target
-        } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
     }
 
-    # shortcut: a truncated tree fails the source instead of being paged through.
-    function Save-Listed($repo, [scriptblock]$map, $dest) {
-        $tree = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/trees/HEAD?recursive=1" -Headers @{ Accept = 'application/vnd.github+json' }
-        if ($tree.truncated -ne $false) { throw "$repo tree is truncated" }
-        $pairs = @($tree.tree | Where-Object type -eq 'blob' | ForEach-Object { & $map $_.path } | Where-Object { $_ })
-        if ($pairs.Count -eq 0) { throw "nothing matched in $repo" }
-        foreach ($p in $pairs) { Save-Remote "https://raw.githubusercontent.com/$repo/HEAD/$($p.Src)" (Join-Path $dest $p.Rel) }
-    }
-
-    # Fetch a source into a temp dir; write it to ~/.agents only if every fetch worked.
-    function Invoke-Source($name, [scriptblock]$fetch) {
-        $stage = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
-        try {
-            & $fetch $stage
-            Copy-Tree $stage $agents
-            Write-Host "[+] $name"
-        } catch {
-            Write-Host "[x] $name failed; skipped: $($_.Exception.Message)" -ForegroundColor Red
-            $state.Failed = $true
-        } finally { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
-    }
-
-    $own = 'https://raw.githubusercontent.com/jakehildreth/jakehildreth/HEAD'
-    $awesome = 'https://raw.githubusercontent.com/github/awesome-copilot/HEAD'
-
-    Invoke-Source 'jakehildreth: instructions, hooks, skills' {
-        param($s)
-        Save-Instruction "$own/.github/copilot-instructions.md" (Join-Path $s 'instructions/personal.md')
-        foreach ($f in 'no-ai-attribution.json', 'no-ai-attribution.sh', 'no-ai-attribution.ps1', 'no-squash-merge.json', 'no-squash-merge.sh', 'no-squash-merge.ps1') {
-            Save-Remote "$own/hooks/$f" (Join-Path $s "hooks/$f")
+    Install-Source -Name 'awesome-copilot: instructions, agents, skills' -Fetch {
+        param($StagingPath)
+        Save-InstructionFile -Uri "$awesomeBaseUri/instructions/powershell.instructions.md" -Path (Join-Path -Path $StagingPath -ChildPath 'instructions/powershell.md')
+        Save-InstructionFile -Uri "$awesomeBaseUri/instructions/powershell-pester-6.instructions.md" -Path (Join-Path -Path $StagingPath -ChildPath 'instructions/pester.md')
+        Save-InstructionFile -Uri "$awesomeBaseUri/instructions/csharp.instructions.md" -Path (Join-Path -Path $StagingPath -ChildPath 'instructions/csharp.md')
+        foreach ($agentFile in 'CSharpExpert.agent.md', 'csharp-dotnet-janitor.agent.md') {
+            Save-RemoteFile -Uri "$awesomeBaseUri/agents/$agentFile" -Path (Join-Path -Path $StagingPath -ChildPath "agents/$agentFile")
         }
-        Save-Listed 'jakehildreth/jakehildreth' {
-            param($p)
-            if ($p -cmatch '^skills/(conference-talk-summary|new-linkedin-post|talk-developer|writing-voice)/') { @{ Src = $p; Rel = $p.Substring(7) } }
-        } (Join-Path $s 'skills')
-    }
-
-    Invoke-Source 'awesome-copilot: instructions, agents, skills' {
-        param($s)
-        Save-Instruction "$awesome/instructions/powershell.instructions.md" (Join-Path $s 'instructions/powershell.md')
-        Save-Instruction "$awesome/instructions/powershell-pester-6.instructions.md" (Join-Path $s 'instructions/pester.md')
-        Save-Instruction "$awesome/instructions/csharp.instructions.md" (Join-Path $s 'instructions/csharp.md')
-        foreach ($f in 'CSharpExpert.agent.md', 'csharp-dotnet-janitor.agent.md') {
-            Save-Remote "$awesome/agents/$f" (Join-Path $s "agents/$f")
-        }
-        foreach ($f in 'pester-migration/SKILL.md', 'pester-migration/references/v3-to-v4.md', 'pester-migration/references/v4-to-v5.md', 'pester-migration/references/v5-to-v6.md', 'csharp-docs/SKILL.md') {
-            Save-Remote "$awesome/skills/$f" (Join-Path $s "skills/$f")
+        foreach ($skillFile in 'pester-migration/SKILL.md', 'pester-migration/references/v3-to-v4.md', 'pester-migration/references/v4-to-v5.md', 'pester-migration/references/v5-to-v6.md', 'csharp-docs/SKILL.md') {
+            Save-RemoteFile -Uri "$awesomeBaseUri/skills/$skillFile" -Path (Join-Path -Path $StagingPath -ChildPath "skills/$skillFile")
         }
     }
 
-    Invoke-Source 'mattpocock/skills' {
-        param($s)
-        Save-Listed 'mattpocock/skills' {
-            param($p)
-            if ($p -cmatch '^skills/(?:engineering|productivity)/([^/]+/.+)$') { @{ Src = $p; Rel = $Matches[1] } }
-        } (Join-Path $s 'skills')
+    Install-Source -Name 'mattpocock/skills' -Fetch {
+        param($StagingPath)
+        Save-RepositoryFile -Repository 'mattpocock/skills' -DestinationDirectory (Join-Path -Path $StagingPath -ChildPath 'skills') -Select {
+            param($RepositoryPath)
+            if ($RepositoryPath -cmatch '^skills/(?:engineering|productivity)/([^/]+/.+)$') {
+                @{ SourcePath = $RepositoryPath; RelativePath = $Matches[1] }
+            }
+        }
     }
 
-    Invoke-Source 'DietrichGebert/ponytail' {
-        param($s)
-        Save-Listed 'DietrichGebert/ponytail' {
-            param($p)
-            if ($p -cmatch '^skills/([^/]+/SKILL\.md)$') { @{ Src = $p; Rel = $Matches[1] } }
-        } (Join-Path $s 'skills')
+    Install-Source -Name 'DietrichGebert/ponytail' -Fetch {
+        param($StagingPath)
+        Save-RepositoryFile -Repository 'DietrichGebert/ponytail' -DestinationDirectory (Join-Path -Path $StagingPath -ChildPath 'skills') -Select {
+            param($RepositoryPath)
+            if ($RepositoryPath -cmatch '^skills/([^/]+/SKILL\.md)$') {
+                @{ SourcePath = $RepositoryPath; RelativePath = $Matches[1] }
+            }
+        }
     }
 
     # Copy from ~/.agents into each harness directory that already exists.
+    $distributeWrittenBefore = $runState.FilesWritten
+    $distributeStatus = 'Failed'
+    $distributeMessage = ''
     try {
-        $inst = Join-Path $agents 'instructions'
-        $claude = Join-Path $HOME '.claude'
-        $omp = Join-Path $HOME '.omp/agent'
-        $copilot = Join-Path $HOME '.copilot'
-        foreach ($h in $claude, $omp, $copilot) {
-            if (Test-Path -LiteralPath $h -PathType Container) { Copy-Tree (Join-Path $agents 'skills') (Join-Path $h 'skills') }
-        }
-        if (Test-Path -LiteralPath $claude -PathType Container) { Copy-Tree (Join-Path $agents 'agents') (Join-Path $claude 'agents') }
-        if (Test-Path -LiteralPath $copilot -PathType Container) { Copy-Tree (Join-Path $agents 'hooks') (Join-Path $copilot 'hooks') }
+        $instructionsPath = Join-Path -Path $agentsPath -ChildPath 'instructions'
+        $claudePath = Join-Path -Path $HOME -ChildPath '.claude'
+        $ompPath = Join-Path -Path $HOME -ChildPath '.omp/agent'
+        $copilotPath = Join-Path -Path $HOME -ChildPath '.copilot'
+        $claudeExists = Test-Path -LiteralPath $claudePath -PathType Container
+        $ompExists = Test-Path -LiteralPath $ompPath -PathType Container
+        $copilotExists = Test-Path -LiteralPath $copilotPath -PathType Container
 
-        $names = 'personal', 'powershell', 'pester', 'csharp'
-        $body = ''
-        foreach ($n in $names) {
-            $f = Join-Path $inst "$n.md"
-            if (Test-Path -LiteralPath $f) { $body += [IO.File]::ReadAllText($f) + "`n" }
-        }
-        Set-Block (Join-Path $HOME 'AGENTS.md') $body
-        if (Test-Path -LiteralPath $claude -PathType Container) { Set-Block (Join-Path $claude 'CLAUDE.md') $body }
-        if (Test-Path -LiteralPath $omp -PathType Container) { Set-Block (Join-Path $omp 'AGENTS.md') $body }
-
-        if (Test-Path -LiteralPath $copilot -PathType Container) {
-            $apply = @{ personal = '**/*'; powershell = '**/*.ps1,**/*.psm1'; pester = '**/*.Tests.ps1'; csharp = '**/*.cs' }
-            foreach ($n in $names) {
-                $f = Join-Path $inst "$n.md"
-                if (-not (Test-Path -LiteralPath $f)) { continue }
-                $tmp = [IO.Path]::GetTempFileName()
-                try {
-                    [IO.File]::WriteAllText($tmp, "---`napplyTo: '$($apply[$n])'`n---`n`n" + [IO.File]::ReadAllText($f), $utf8)
-                    Copy-IfChanged $tmp (Join-Path $copilot "instructions/$n.instructions.md")
-                } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+        foreach ($harnessPath in $claudePath, $ompPath, $copilotPath) {
+            if (Test-Path -LiteralPath $harnessPath -PathType Container) {
+                Copy-FileTree -SourceDirectory (Join-Path -Path $agentsPath -ChildPath 'skills') -DestinationDirectory (Join-Path -Path $harnessPath -ChildPath 'skills')
             }
         }
-    } catch {
-        Write-Host "[x] distribute failed: $($_.Exception.Message)" -ForegroundColor Red
-        $state.Failed = $true
-    }
+        if ($claudeExists) {
+            Copy-FileTree -SourceDirectory (Join-Path -Path $agentsPath -ChildPath 'agents') -DestinationDirectory (Join-Path -Path $claudePath -ChildPath 'agents')
+        }
+        if ($copilotExists) {
+            Copy-FileTree -SourceDirectory (Join-Path -Path $agentsPath -ChildPath 'hooks') -DestinationDirectory (Join-Path -Path $copilotPath -ChildPath 'hooks')
+        }
 
-    Write-Host "[i] $($state.Changed) file(s) written; replaced files are kept as *.bak.$($state.Ts)"
-    if ($state.Failed) { $global:LASTEXITCODE = 1 }
+        $instructionNames = 'personal', 'powershell', 'pester', 'csharp'
+        $instructionParts = foreach ($instructionName in $instructionNames) {
+            $instructionPath = Join-Path -Path $instructionsPath -ChildPath "$instructionName.md"
+            if (Test-Path -LiteralPath $instructionPath) {
+                [System.IO.File]::ReadAllText($instructionPath) + "`n"
+            }
+        }
+        $instructionBody = $instructionParts -join ''
+        if ($instructionBody) {
+            Write-ManagedBlock -Path (Join-Path -Path $HOME -ChildPath 'AGENTS.md') -Body $instructionBody
+            if ($claudeExists) {
+                Write-ManagedBlock -Path (Join-Path -Path $claudePath -ChildPath 'CLAUDE.md') -Body $instructionBody
+            }
+            if ($ompExists) {
+                Write-ManagedBlock -Path (Join-Path -Path $ompPath -ChildPath 'AGENTS.md') -Body $instructionBody
+            }
+        }
+
+        if ($copilotExists) {
+            $applyTo = @{ personal = '**/*'; powershell = '**/*.ps1,**/*.psm1'; pester = '**/*.Tests.ps1'; csharp = '**/*.cs' }
+            foreach ($instructionName in $instructionNames) {
+                $instructionPath = Join-Path -Path $instructionsPath -ChildPath "$instructionName.md"
+                if (-not (Test-Path -LiteralPath $instructionPath)) {
+                    continue
+                }
+                $stagedPath = [System.IO.Path]::GetTempFileName()
+                try {
+                    $content = "---`napplyTo: '$($applyTo[$instructionName])'`n---`n`n" + [System.IO.File]::ReadAllText($instructionPath)
+                    [System.IO.File]::WriteAllText($stagedPath, $content, $utf8NoBom)
+                    Copy-FileIfChanged -Source $stagedPath -Destination (Join-Path -Path $copilotPath -ChildPath "instructions/$instructionName.instructions.md")
+                } finally {
+                    Remove-Item -LiteralPath $stagedPath -Force -WhatIf:$false -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        $distributeStatus = if ($WhatIfPreference) { 'WhatIf' } else { 'Installed' }
+    } catch {
+        $distributeMessage = $_.Exception.Message
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            $_.Exception,
+            'DistributeFailed',
+            [System.Management.Automation.ErrorCategory]::NotSpecified,
+            $HOME
+        )
+        $PSCmdlet.WriteError($errorRecord)
+    }
+    [pscustomobject]@{
+        Source       = 'Harness directories and AGENTS.md'
+        Status       = $distributeStatus
+        FilesWritten = $runState.FilesWritten - $distributeWrittenBefore
+        Message      = $distributeMessage
+    }
+    Write-Verbose -Message "Replaced files are kept as *.bak.$($runState.Timestamp)"
 }
 
