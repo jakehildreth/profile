@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.10.262057
+# Version 2026.10.262113
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -154,7 +154,7 @@ function Get-AgentInstructions {
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.10.262057"
+version: "2026.10.262113"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
@@ -328,9 +328,8 @@ write it to `~/.copilot/hooks/<file>`:
 | `no-ai-attribution.ps1` | Windows (PowerShell) equivalent of `no-ai-attribution.sh`. |
 | `no-squash-merge.ps1` | Windows (PowerShell) equivalent of `no-squash-merge.sh`. |
 
-- Install hooks ONLY if Copilot CLI is already configured on this machine (`~/.copilot/` exists);
-  do not create `~/.copilot/` otherwise.
-- Create `~/.copilot/hooks/` if needed, overwrite existing copies of these six files, and leave
+- Install hooks on every machine, even if Copilot CLI has never been run: create `~/.copilot/` and
+  `~/.copilot/hooks/` if they do not exist, overwrite existing copies of these six files, and leave
   any other files in that directory alone.
 - Install all six files on every OS (the `.json` files select the right script per platform).
   On macOS/Linux run `chmod +x ~/.copilot/hooks/no-ai-attribution.sh ~/.copilot/hooks/no-squash-merge.sh`;
