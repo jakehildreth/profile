@@ -57,7 +57,7 @@ fish>
 
 - `New-Credential` / `new_credential` — interactive credential prompt, cross-platform
 - `Get-IPAddress` / `get_ip_address` — lists non-loopback IPv4 addresses
-- `Get-AgentInstructions` / `gai` — copies an installer prompt to the clipboard that sets up global user-level agent instructions and skills under `~/.agents/` (harness-agnostic, with pointers for Copilot, Claude Code, and `AGENTS.md`-based agents)
+- `Get-AgentInstructions` / `gai` — installs global user-level agent content: fetches instructions, agents, skills, and Copilot CLI hooks from upstream into `~/.agents/` and copies them into each agent harness directory that already exists (`~/.claude`, `~/.omp/agent`, `~/.copilot`). Instructions are also written into a managed block in `~/AGENTS.md` (and each harness's own `AGENTS.md`/`CLAUDE.md`). Each source is applied independently; changed files are backed up as `*.bak.<timestamp>`. Needs `curl` and `jq` in bash/zsh/fish.
 - `New-Function` — scaffolds a new PowerShell function file with comment-based help
 
 ### Auto-Update

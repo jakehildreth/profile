@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.10.262113
+# Version 2026.10.262227
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -149,214 +149,194 @@ function Get-IPAddress {
 }
 
 function Get-AgentInstructions {
+    <#
+    .SYNOPSIS
+        Install Jake's global agent instructions, agents, skills, and hooks.
+    #>
     [Alias('gai')]
     param()
-    @'
----
-description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.10.262113"
----
 
-# Install Global Agent Instructions, Agents, and Skills
+    $ErrorActionPreference = 'Stop'
+    $ProgressPreference = 'SilentlyContinue'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $state = @{ Changed = 0; Failed = $false; Ts = (Get-Date -Format 'yyyyMMddHHmmss') }
+    $agents = Join-Path $HOME '.agents'
+    $utf8 = New-Object Text.UTF8Encoding $false
 
-Create or update my user-level agent content so it applies automatically to every workspace,
-regardless of which agent, harness, or model I am using, without me having to paste URLs at the
-start of each chat.
+    function Save-Remote($url, $dest) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 30
+    }
 
-## Instruction source URLs to fetch
+    # Fetch an instruction file and strip its YAML frontmatter.
+    function Save-Instruction($url, $dest) {
+        $tmp = [IO.Path]::GetTempFileName()
+        try {
+            Save-Remote $url $tmp
+            $lines = [IO.File]::ReadAllLines($tmp)
+            $i = 0
+            if ($lines.Count -gt 0 -and $lines[0] -match '^---\s*$') {
+                $i = 1
+                while ($i -lt $lines.Count -and $lines[$i] -notmatch '^---\s*$') { $i++ }
+                $i++
+            }
+            $text = if ($i -lt $lines.Count) { ($lines[$i..($lines.Count - 1)] -join "`n") + "`n" } else { '' }
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+            [IO.File]::WriteAllText($dest, $text, $utf8)
+        } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
 
-1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
-2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
-3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
-4. **C# best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/instructions/csharp.instructions.md`
+    # Copy src to dst; back dst up first when its content would change.
+    function Copy-IfChanged($src, $dst) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+        if (Test-Path -LiteralPath $dst) {
+            if ((Get-FileHash -LiteralPath $src).Hash -eq (Get-FileHash -LiteralPath $dst).Hash) { return }
+            Copy-Item -LiteralPath $dst -Destination "$dst.bak.$($state.Ts)"
+        }
+        Copy-Item -LiteralPath $src -Destination $dst
+        if ($dst -like '*.sh' -and $PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { chmod +x $dst }
+        $state.Changed++
+    }
 
-## Agent source URLs to fetch
+    # shortcut: Get-ChildItem -Recurse does not follow directory symlinks on Windows PowerShell 5.1.
+    function Copy-Tree($srcDir, $dstDir) {
+        if (-not (Test-Path -LiteralPath $srcDir -PathType Container)) { return }
+        $root = (Resolve-Path -LiteralPath $srcDir).ProviderPath.TrimEnd('\', '/')
+        Get-ChildItem -LiteralPath $root -Recurse -File -Force |
+            Where-Object { $_.Name -notlike '*.bak.*' -and $_.Name -ne '.DS_Store' } |
+            ForEach-Object { Copy-IfChanged $_.FullName (Join-Path $dstDir $_.FullName.Substring($root.Length).TrimStart('\', '/')) }
+    }
 
-1. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/CSharpExpert.agent.md`
-2. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/csharp-dotnet-janitor.agent.md`
+    # Replace (or append) the managed block in a shared markdown file.
+    function Set-Block($target, $body) {
+        $block = "<!-- BEGIN gai (managed block; edits here are overwritten) -->`n$body`n<!-- END gai -->`n"
+        $existing = if (Test-Path -LiteralPath $target) { [IO.File]::ReadAllText($target) } else { $null }
+        if ($null -eq $existing) {
+            $new = $block
+        } else {
+            $b = $existing.IndexOf('<!-- BEGIN gai')
+            if ($b -ge 0) {
+                $e = $existing.IndexOf('<!-- END gai -->', $b)
+                $eol = if ($e -ge 0) { $existing.IndexOf("`n", $e) } else { -1 }
+                $tail = if ($e -ge 0 -and $eol -ge 0) { $existing.Substring($eol + 1) } else { '' }
+                $new = $existing.Substring(0, $b) + $block + $tail
+            } else {
+                $new = $existing + "`n" + $block
+            }
+        }
+        $tmp = [IO.Path]::GetTempFileName()
+        try {
+            [IO.File]::WriteAllText($tmp, $new, $utf8)
+            Copy-IfChanged $tmp $target
+        } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
 
-## Skill source URLs to fetch
+    # shortcut: a truncated tree fails the source instead of being paged through.
+    function Save-Listed($repo, [scriptblock]$map, $dest) {
+        $tree = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/trees/HEAD?recursive=1" -Headers @{ Accept = 'application/vnd.github+json' }
+        if ($tree.truncated -ne $false) { throw "$repo tree is truncated" }
+        $pairs = @($tree.tree | Where-Object type -eq 'blob' | ForEach-Object { & $map $_.path } | Where-Object { $_ })
+        if ($pairs.Count -eq 0) { throw "nothing matched in $repo" }
+        foreach ($p in $pairs) { Save-Remote "https://raw.githubusercontent.com/$repo/HEAD/$($p.Src)" (Join-Path $dest $p.Rel) }
+    }
 
-awesome-copilot skills (base: `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/`):
+    # Fetch a source into a temp dir; write it to ~/.agents only if every fetch worked.
+    function Invoke-Source($name, [scriptblock]$fetch) {
+        $stage = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+        try {
+            & $fetch $stage
+            Copy-Tree $stage $agents
+            Write-Host "[+] $name"
+        } catch {
+            Write-Host "[x] $name failed; skipped: $($_.Exception.Message)" -ForegroundColor Red
+            $state.Failed = $true
+        } finally { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+    }
 
-1. `skills/pester-migration/SKILL.md`
-2. `skills/pester-migration/references/v3-to-v4.md`
-3. `skills/pester-migration/references/v4-to-v5.md`
-4. `skills/pester-migration/references/v5-to-v6.md`
-5. `skills/csharp-docs/SKILL.md`
+    $own = 'https://raw.githubusercontent.com/jakehildreth/jakehildreth/HEAD'
+    $awesome = 'https://raw.githubusercontent.com/github/awesome-copilot/HEAD'
 
-Matt Pocock's skills (repo: `mattpocock/skills`, branch `main`) - install EVERY skill found in
-the `skills/engineering/` and `skills/productivity/` categories (do NOT install anything from
-`misc/`, `deprecated/`, or `in-progress/`). Do NOT hardcode a skill list; the tree is the source
-of truth.
+    Invoke-Source 'jakehildreth: instructions, hooks, skills' {
+        param($s)
+        Save-Instruction "$own/.github/copilot-instructions.md" (Join-Path $s 'instructions/personal.md')
+        foreach ($f in 'no-ai-attribution.json', 'no-ai-attribution.sh', 'no-ai-attribution.ps1', 'no-squash-merge.json', 'no-squash-merge.sh', 'no-squash-merge.ps1') {
+            Save-Remote "$own/hooks/$f" (Join-Path $s "hooks/$f")
+        }
+        Save-Listed 'jakehildreth/jakehildreth' {
+            param($p)
+            if ($p -cmatch '^skills/(conference-talk-summary|new-linkedin-post|talk-developer|writing-voice)/') { @{ Src = $p; Rel = $p.Substring(7) } }
+        } (Join-Path $s 'skills')
+    }
 
-Enumeration and install:
+    Invoke-Source 'awesome-copilot: instructions, agents, skills' {
+        param($s)
+        Save-Instruction "$awesome/instructions/powershell.instructions.md" (Join-Path $s 'instructions/powershell.md')
+        Save-Instruction "$awesome/instructions/powershell-pester-6.instructions.md" (Join-Path $s 'instructions/pester.md')
+        Save-Instruction "$awesome/instructions/csharp.instructions.md" (Join-Path $s 'instructions/csharp.md')
+        foreach ($f in 'CSharpExpert.agent.md', 'csharp-dotnet-janitor.agent.md') {
+            Save-Remote "$awesome/agents/$f" (Join-Path $s "agents/$f")
+        }
+        foreach ($f in 'pester-migration/SKILL.md', 'pester-migration/references/v3-to-v4.md', 'pester-migration/references/v4-to-v5.md', 'pester-migration/references/v5-to-v6.md', 'csharp-docs/SKILL.md') {
+            Save-Remote "$awesome/skills/$f" (Join-Path $s "skills/$f")
+        }
+    }
 
-1. Enumerate the repo via one GitHub API call:
-   `https://api.github.com/repos/mattpocock/skills/git/trees/main?recursive=1`
-2. From the tree, derive the skill list: every `tree`-type entry at depth 3 whose path matches
-   `skills/engineering/<name>` or `skills/productivity/<name>` is a skill named `<name>`.
-3. For EACH discovered skill, fetch every `blob` under its directory from
-   `https://raw.githubusercontent.com/mattpocock/skills/main/<path>` and write it to
-   `~/.agents/skills/<name>/<path-relative-to-skill-dir>`.
+    Invoke-Source 'mattpocock/skills' {
+        param($s)
+        Save-Listed 'mattpocock/skills' {
+            param($p)
+            if ($p -cmatch '^skills/(?:engineering|productivity)/([^/]+/.+)$') { @{ Src = $p; Rel = $Matches[1] } }
+        } (Join-Path $s 'skills')
+    }
 
-File lists and skill names change upstream; that is why enumeration happens at install time
-instead of a fixed file table or skill list here. If the API call fails (rate limit, offline),
-stop and report it; do not guess skill or file names.
+    Invoke-Source 'DietrichGebert/ponytail' {
+        param($s)
+        Save-Listed 'DietrichGebert/ponytail' {
+            param($p)
+            if ($p -cmatch '^skills/([^/]+/SKILL\.md)$') { @{ Src = $p; Rel = $Matches[1] } }
+        } (Join-Path $s 'skills')
+    }
 
-Jake's own skills (repo: `jakehildreth/jakehildreth`, branch `main`) - install these 4 skills:
+    # Copy from ~/.agents into each harness directory that already exists.
+    try {
+        $inst = Join-Path $agents 'instructions'
+        $claude = Join-Path $HOME '.claude'
+        $omp = Join-Path $HOME '.omp/agent'
+        $copilot = Join-Path $HOME '.copilot'
+        foreach ($h in $claude, $omp, $copilot) {
+            if (Test-Path -LiteralPath $h -PathType Container) { Copy-Tree (Join-Path $agents 'skills') (Join-Path $h 'skills') }
+        }
+        if (Test-Path -LiteralPath $claude -PathType Container) { Copy-Tree (Join-Path $agents 'agents') (Join-Path $claude 'agents') }
+        if (Test-Path -LiteralPath $copilot -PathType Container) { Copy-Tree (Join-Path $agents 'hooks') (Join-Path $copilot 'hooks') }
 
-```
-conference-talk-summary new-linkedin-post talk-developer writing-voice
-```
+        $names = 'personal', 'powershell', 'pester', 'csharp'
+        $body = ''
+        foreach ($n in $names) {
+            $f = Join-Path $inst "$n.md"
+            if (Test-Path -LiteralPath $f) { $body += [IO.File]::ReadAllText($f) + "`n" }
+        }
+        Set-Block (Join-Path $HOME 'AGENTS.md') $body
+        if (Test-Path -LiteralPath $claude -PathType Container) { Set-Block (Join-Path $claude 'CLAUDE.md') $body }
+        if (Test-Path -LiteralPath $omp -PathType Container) { Set-Block (Join-Path $omp 'AGENTS.md') $body }
 
-Same enumeration pattern: one GitHub API tree call
-(`https://api.github.com/repos/jakehildreth/jakehildreth/git/trees/main?recursive=1`), filter to
-`skills/<name>/`, fetch every file from
-`https://raw.githubusercontent.com/jakehildreth/jakehildreth/main/<path>` and write it to
-`~/.agents/skills/<name>/`. Same failure rule: if the API call fails, stop and report it.
+        if (Test-Path -LiteralPath $copilot -PathType Container) {
+            $apply = @{ personal = '**/*'; powershell = '**/*.ps1,**/*.psm1'; pester = '**/*.Tests.ps1'; csharp = '**/*.cs' }
+            foreach ($n in $names) {
+                $f = Join-Path $inst "$n.md"
+                if (-not (Test-Path -LiteralPath $f)) { continue }
+                $tmp = [IO.Path]::GetTempFileName()
+                try {
+                    [IO.File]::WriteAllText($tmp, "---`napplyTo: '$($apply[$n])'`n---`n`n" + [IO.File]::ReadAllText($f), $utf8)
+                    Copy-IfChanged $tmp (Join-Path $copilot "instructions/$n.instructions.md")
+                } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    } catch {
+        Write-Host "[x] distribute failed: $($_.Exception.Message)" -ForegroundColor Red
+        $state.Failed = $true
+    }
 
-Dietrich Gebert's ponytail skills (repo: `DietrichGebert/ponytail`, branch `main`) - install every
-skill in the repo's `skills/` directory.
-
-Same enumeration pattern: one GitHub API tree call
-(`https://api.github.com/repos/DietrichGebert/ponytail/git/trees/main?recursive=1`). Every
-`tree`-type entry at depth 2 whose path matches `skills/<name>` is a skill named `<name>`; fetch
-only its `SKILL.md` from
-`https://raw.githubusercontent.com/DietrichGebert/ponytail/main/skills/<name>/SKILL.md` and write
-it to `~/.agents/skills/<name>/SKILL.md`. This excludes `skills/plugin.json`, any other file
-directly under `skills/`, and any supporting files inside a skill directory - those are plugin
-machinery or skill internals we do not install. Install the SKILL.md files only; do NOT install
-the repo's hooks, plugins, commands, or rule files. Same failure rule: if the API call fails,
-stop and report it; do not guess skill or file names.
-
-## Target location
-
-Create the directory tree if it does not exist:
-
-```
-~/.agents/instructions/
-~/.agents/agents/
-~/.agents/skills/pester-migration/references/
-~/.agents/skills/csharp-docs/
-```
-
-`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The instruction
-and agent files below are the single source of truth; per-harness locations (next section) point
-at them instead of holding their own copies. Skill directories are created by the skill fetch
-steps above.
-
-## Instruction files to create/update in `~/.agents/instructions/`
-
-| File | Content |
-|---|---|
-| `personal.md` | Jake's interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the other instruction files. |
-| `powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
-| `pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
-| `csharp.md` | C# development best practices. |
-
-These are plain markdown with NO frontmatter. Harness-specific `applyTo` scoping lives only in the
-per-harness pointer files, not here.
-
-## Agent files to create/update in `~/.agents/agents/`
-
-| File | Content |
-|---|---|
-| `CSharpExpert.agent.md` | C# Expert agent: expert C#/.NET development assistance. |
-| `csharp-dotnet-janitor.agent.md` | C#/.NET Janitor agent: cleanup, modernization, and tech debt remediation for C#/.NET codebases. |
-
-Write agent files verbatim from upstream, frontmatter included. Do NOT strip, add, or modify
-anything.
-
-## Per-harness pointer files
-
-Wire each installed harness to the canonical files. Create a pointer ONLY for harnesses already
-installed or configured on this machine; do not create directories for harnesses I do not use.
-Prefer symlinks from the harness location to the `~/.agents/` files where the harness supports
-them; otherwise create the small pointer files described below.
-
-| Harness | Pointer location | Pointer content |
-|---|---|---|
-| omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
-| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (all Matt Pocock engineering/productivity skills, Jake's 4 skills, all ponytail skills, `pester-migration/`, `csharp-docs/`). |
-| Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
-| Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
-| VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
-| Any harness supporting `AGENTS.md` | `~/AGENTS.md` | Markdown that includes or references the four `~/.agents/instructions/` files. |
-
-Do NOT overwrite existing non-pointer content in `~/.claude/CLAUDE.md` or `~/AGENTS.md`; merge or
-append around it.
-
-## Skills to install
-
-All skills install under `~/.agents/skills/<name>/`:
-
-| Skill | Source | Target |
-|---|---|---|
-| `pester-migration` | awesome-copilot, 4 files listed above (SKILL.md + 3 references) | `~/.agents/skills/pester-migration/` |
-| `csharp-docs` | awesome-copilot, `skills/csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
-| All Matt Pocock engineering/productivity skills | `mattpocock/skills`, skills and files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-| 4 Jake skills | `jakehildreth/jakehildreth`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-| All ponytail skills | `DietrichGebert/ponytail`, skills enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-
-Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'s own
-`name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
-unchanged.
-
-For each installed harness with its own skills directory, symlink EVERY skill in
-`~/.agents/skills/` into it (or copy the files if the harness cannot follow symlinks):
-
-| Harness | Skills location |
-|---|---|
-| omp | `~/.omp/agent/skills/` |
-| Claude Code | `~/.claude/skills/` |
-| VS Code Copilot | `~/.copilot/skills/` |
-
-## Hooks to install
-
-Copilot CLI user-level hooks enforce rules that instructions alone cannot guarantee. Fetch each
-file below verbatim (do NOT modify it) from
-`https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/hooks/<file>` and
-write it to `~/.copilot/hooks/<file>`:
-
-| File | Purpose |
-|---|---|
-| `no-ai-attribution.json` | Registers a `preToolUse` command hook; runs the `.sh` script on macOS/Linux (`bash`) and the `.ps1` script on Windows (`powershell`). |
-| `no-ai-attribution.sh` | Denies `git commit` and `gh pr create`/`gh pr edit` commands that add AI attribution (`Co-authored-by:` Copilot/Claude/etc., `Generated-By:`, `Generated with`), so the agent must retry without it. |
-| `no-squash-merge.json` | Registers a `preToolUse` command hook; runs the `.sh` script on macOS/Linux (`bash`) and the `.ps1` script on Windows (`powershell`). |
-| `no-squash-merge.sh` | Denies `gh pr merge` without `--merge` (squash and rebase merges) and `git merge --squash`; PRs are merged with a merge commit only. |
-| `no-ai-attribution.ps1` | Windows (PowerShell) equivalent of `no-ai-attribution.sh`. |
-| `no-squash-merge.ps1` | Windows (PowerShell) equivalent of `no-squash-merge.sh`. |
-
-- Install hooks on every machine, even if Copilot CLI has never been run: create `~/.copilot/` and
-  `~/.copilot/hooks/` if they do not exist, overwrite existing copies of these six files, and leave
-  any other files in that directory alone.
-- Install all six files on every OS (the `.json` files select the right script per platform).
-  On macOS/Linux run `chmod +x ~/.copilot/hooks/no-ai-attribution.sh ~/.copilot/hooks/no-squash-merge.sh`;
-  skip `chmod` on Windows, where `~/.copilot/` is `%USERPROFILE%\.copilot\`.
-- Verify by piping a JSON payload whose `toolArgs` command is a `git commit` containing a
-  `Co-authored-by: Copilot` line into the script for the current OS (`.sh` via `bash`, `.ps1` via
-  `powershell -File`) and confirming it prints a `permissionDecision`
-  of `deny`; a clean `git commit` payload must print nothing.
-  Likewise a `gh pr merge 1 --squash` payload must print `deny` and a `gh pr merge 1 --merge`
-  payload must print nothing.
-- The hook takes effect on the next Copilot CLI session.
-
-## Requirements
-
-- After fetching each INSTRUCTION source URL, strip its existing frontmatter (if any) before
-  inserting the remaining body content into the canonical `~/.agents/instructions/` files.
-- Agent files and skill files are copied verbatim; do not strip their frontmatter.
-- If a target file already exists, merge new source content without overwriting project-specific
-  priorities. The conflict resolution priority must remain: project-level instructions (a repo's
-  own `AGENTS.md`/`CLAUDE.md`/`.instructions.md`) > these user-level files > externally
-  referenced docs.
-- After creating/updating the files, list them and confirm their paths.
-- If the source URLs are unreachable, stop and report the error; do not create empty files.
-- The GitHub API tree calls (`mattpocock/skills`, `jakehildreth/jakehildreth`,
-  `DietrichGebert/ponytail`) are the source of truth for those skills' file lists. If any of them
-  fails (rate limit, offline), stop and report it; do not guess file names.
-
-'@ | Set-Clipboard
+    Write-Host "[i] $($state.Changed) file(s) written; replaced files are kept as *.bak.$($state.Ts)"
+    if ($state.Failed) { $global:LASTEXITCODE = 1 }
 }
 

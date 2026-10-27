@@ -1,5 +1,5 @@
 # dotbashrc
-# Version 2026.10.262113
+# Version 2026.10.262227
 # https://github.com/jakehildreth/profile/profiles/dotbashrc
 
 #region Self-Update
@@ -95,223 +95,166 @@ get_ip_address() {
     fi
 }
 
-# gai — copy global agent instruction installer prompt to clipboard
-gai() {
-    local prompt='---
-description: "Install or update Jake'\''s global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.10.262113"
----
+# gai — install Jake's global agent instructions, agents, skills, and hooks
+__gai_fetch() { curl -fsSL --connect-timeout 10 --create-dirs -o "$2" "$1"; }
 
-# Install Global Agent Instructions, Agents, and Skills
+# Fetch an instruction file and strip its YAML frontmatter.
+__gai_instr() {
+    local tmp
+    tmp="$(mktemp)" || return 1
+    __gai_fetch "$1" "$tmp" || { rm -f "$tmp"; return 1; }
+    mkdir -p "$(dirname "$2")" && awk 'NR==1&&/^---[[:space:]]*$/{f=1;next} f&&/^---[[:space:]]*$/{f=0;next} !f' "$tmp" > "$2"
+    local rc=$?
+    rm -f "$tmp"
+    return $rc
+}
 
-Create or update my user-level agent content so it applies automatically to every workspace,
-regardless of which agent, harness, or model I am using, without me having to paste URLs at the
-start of each chat.
-
-## Instruction source URLs to fetch
-
-1. **Personal instructions:** `https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/.github/copilot-instructions.md`
-2. **PowerShell best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell.instructions.md`
-3. **Pester v6 best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/refs/heads/main/instructions/powershell-pester-6.instructions.md`
-4. **C# best practices:** `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/instructions/csharp.instructions.md`
-
-## Agent source URLs to fetch
-
-1. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/CSharpExpert.agent.md`
-2. `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/agents/csharp-dotnet-janitor.agent.md`
-
-## Skill source URLs to fetch
-
-awesome-copilot skills (base: `https://raw.githubusercontent.com/github/awesome-copilot/6c4d33b9cfca967a28bb2962ef4d55e4a384c88c/`):
-
-1. `skills/pester-migration/SKILL.md`
-2. `skills/pester-migration/references/v3-to-v4.md`
-3. `skills/pester-migration/references/v4-to-v5.md`
-4. `skills/pester-migration/references/v5-to-v6.md`
-5. `skills/csharp-docs/SKILL.md`
-
-Matt Pocock'\''s skills (repo: `mattpocock/skills`, branch `main`) - install EVERY skill found in
-the `skills/engineering/` and `skills/productivity/` categories (do NOT install anything from
-`misc/`, `deprecated/`, or `in-progress/`). Do NOT hardcode a skill list; the tree is the source
-of truth.
-
-Enumeration and install:
-
-1. Enumerate the repo via one GitHub API call:
-   `https://api.github.com/repos/mattpocock/skills/git/trees/main?recursive=1`
-2. From the tree, derive the skill list: every `tree`-type entry at depth 3 whose path matches
-   `skills/engineering/<name>` or `skills/productivity/<name>` is a skill named `<name>`.
-3. For EACH discovered skill, fetch every `blob` under its directory from
-   `https://raw.githubusercontent.com/mattpocock/skills/main/<path>` and write it to
-   `~/.agents/skills/<name>/<path-relative-to-skill-dir>`.
-
-File lists and skill names change upstream; that is why enumeration happens at install time
-instead of a fixed file table or skill list here. If the API call fails (rate limit, offline),
-stop and report it; do not guess skill or file names.
-
-Jake'\''s own skills (repo: `jakehildreth/jakehildreth`, branch `main`) - install these 4 skills:
-
-```
-conference-talk-summary new-linkedin-post talk-developer writing-voice
-```
-
-Same enumeration pattern: one GitHub API tree call
-(`https://api.github.com/repos/jakehildreth/jakehildreth/git/trees/main?recursive=1`), filter to
-`skills/<name>/`, fetch every file from
-`https://raw.githubusercontent.com/jakehildreth/jakehildreth/main/<path>` and write it to
-`~/.agents/skills/<name>/`. Same failure rule: if the API call fails, stop and report it.
-
-Dietrich Gebert'\''s ponytail skills (repo: `DietrichGebert/ponytail`, branch `main`) - install every
-skill in the repo'\''s `skills/` directory.
-
-Same enumeration pattern: one GitHub API tree call
-(`https://api.github.com/repos/DietrichGebert/ponytail/git/trees/main?recursive=1`). Every
-`tree`-type entry at depth 2 whose path matches `skills/<name>` is a skill named `<name>`; fetch
-only its `SKILL.md` from
-`https://raw.githubusercontent.com/DietrichGebert/ponytail/main/skills/<name>/SKILL.md` and write
-it to `~/.agents/skills/<name>/SKILL.md`. This excludes `skills/plugin.json`, any other file
-directly under `skills/`, and any supporting files inside a skill directory - those are plugin
-machinery or skill internals we do not install. Install the SKILL.md files only; do NOT install
-the repo'\''s hooks, plugins, commands, or rule files. Same failure rule: if the API call fails,
-stop and report it; do not guess skill or file names.
-
-## Target location
-
-Create the directory tree if it does not exist:
-
-```
-~/.agents/instructions/
-~/.agents/agents/
-~/.agents/skills/pester-migration/references/
-~/.agents/skills/csharp-docs/
-```
-
-`~/.agents/` is the harness-agnostic canonical home for user-level agent content. The instruction
-and agent files below are the single source of truth; per-harness locations (next section) point
-at them instead of holding their own copies. Skill directories are created by the skill fetch
-steps above.
-
-## Instruction files to create/update in `~/.agents/instructions/`
-
-| File | Content |
-|---|---|
-| `personal.md` | Jake'\''s interaction guidelines, dev standards, TDD, CalVer, conventional commits, no-emoji rule, git workflow, plus references to the other instruction files. |
-| `powershell.md` | PowerShell cmdlet best practices: naming, parameter design, `[switch]` vs `[bool]`, pipeline/output, error handling, comment-based help, aliases. |
-| `pester.md` | Pester v6 best practices: file structure, Describe/Context/It, assertions, mocking, data-driven tests, tags, skip, configuration. |
-| `csharp.md` | C# development best practices. |
-
-These are plain markdown with NO frontmatter. Harness-specific `applyTo` scoping lives only in the
-per-harness pointer files, not here.
-
-## Agent files to create/update in `~/.agents/agents/`
-
-| File | Content |
-|---|---|
-| `CSharpExpert.agent.md` | C# Expert agent: expert C#/.NET development assistance. |
-| `csharp-dotnet-janitor.agent.md` | C#/.NET Janitor agent: cleanup, modernization, and tech debt remediation for C#/.NET codebases. |
-
-Write agent files verbatim from upstream, frontmatter included. Do NOT strip, add, or modify
-anything.
-
-## Per-harness pointer files
-
-Wire each installed harness to the canonical files. Create a pointer ONLY for harnesses already
-installed or configured on this machine; do not create directories for harnesses I do not use.
-Prefer symlinks from the harness location to the `~/.agents/` files where the harness supports
-them; otherwise create the small pointer files described below.
-
-| Harness | Pointer location | Pointer content |
-|---|---|---|
-| omp | `~/.omp/agent/AGENTS.md` | Ensure it reads (or references) `~/AGENTS.md` first, then the four `~/.agents/instructions/` files (`personal.md`, `powershell.md`, `pester.md`, `csharp.md`). omp has no `applyTo` scoping; its global AGENTS.md is always in context. Do NOT overwrite existing content; merge around it. |
-| omp | `~/.omp/agent/skills/` | Symlink (or copy) every skill installed under `~/.agents/skills/` (all Matt Pocock engineering/productivity skills, Jake'\''s 4 skills, all ponytail skills, `pester-migration/`, `csharp-docs/`). |
-| Claude Code | `~/.claude/CLAUDE.md` | Append (if not already present) `@~/.agents/instructions/personal.md`, `@~/.agents/instructions/powershell.md`, `@~/.agents/instructions/pester.md`, `@~/.agents/instructions/csharp.md` import lines. |
-| Claude Code | `~/.claude/agents/` | Symlink (or copy) `CSharpExpert.agent.md` and `csharp-dotnet-janitor.agent.md` from `~/.agents/agents/`. |
-| VS Code Copilot | `~/.copilot/instructions/*.instructions.md` | One file per source (`personal.instructions.md`, `powershell.instructions.md`, `pester.instructions.md`, `csharp.instructions.md`) with YAML frontmatter (`applyTo`: `**/*` for personal, `**/*.ps1,**/*.psm1` for powershell, `**/*.Tests.ps1` for pester, `**/*.cs` for csharp) and a body that references the matching `~/.agents/instructions/` file. |
-| Any harness supporting `AGENTS.md` | `~/AGENTS.md` | Markdown that includes or references the four `~/.agents/instructions/` files. |
-
-Do NOT overwrite existing non-pointer content in `~/.claude/CLAUDE.md` or `~/AGENTS.md`; merge or
-append around it.
-
-## Skills to install
-
-All skills install under `~/.agents/skills/<name>/`:
-
-| Skill | Source | Target |
-|---|---|---|
-| `pester-migration` | awesome-copilot, 4 files listed above (SKILL.md + 3 references) | `~/.agents/skills/pester-migration/` |
-| `csharp-docs` | awesome-copilot, `skills/csharp-docs/SKILL.md` | `~/.agents/skills/csharp-docs/SKILL.md` |
-| All Matt Pocock engineering/productivity skills | `mattpocock/skills`, skills and files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-| 4 Jake skills | `jakehildreth/jakehildreth`, files enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-| All ponytail skills | `DietrichGebert/ponytail`, skills enumerated at install time per the fetch steps above | `~/.agents/skills/<name>/` |
-
-Write skill files verbatim from upstream. Do NOT strip or add frontmatter; `SKILL.md`'\''s own
-`name`/`description` frontmatter is how harnesses identify the skill, so it must survive the copy
-unchanged.
-
-For each installed harness with its own skills directory, symlink EVERY skill in
-`~/.agents/skills/` into it (or copy the files if the harness cannot follow symlinks):
-
-| Harness | Skills location |
-|---|---|
-| omp | `~/.omp/agent/skills/` |
-| Claude Code | `~/.claude/skills/` |
-| VS Code Copilot | `~/.copilot/skills/` |
-
-## Hooks to install
-
-Copilot CLI user-level hooks enforce rules that instructions alone cannot guarantee. Fetch each
-file below verbatim (do NOT modify it) from
-`https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/hooks/<file>` and
-write it to `~/.copilot/hooks/<file>`:
-
-| File | Purpose |
-|---|---|
-| `no-ai-attribution.json` | Registers a `preToolUse` command hook; runs the `.sh` script on macOS/Linux (`bash`) and the `.ps1` script on Windows (`powershell`). |
-| `no-ai-attribution.sh` | Denies `git commit` and `gh pr create`/`gh pr edit` commands that add AI attribution (`Co-authored-by:` Copilot/Claude/etc., `Generated-By:`, `Generated with`), so the agent must retry without it. |
-| `no-squash-merge.json` | Registers a `preToolUse` command hook; runs the `.sh` script on macOS/Linux (`bash`) and the `.ps1` script on Windows (`powershell`). |
-| `no-squash-merge.sh` | Denies `gh pr merge` without `--merge` (squash and rebase merges) and `git merge --squash`; PRs are merged with a merge commit only. |
-| `no-ai-attribution.ps1` | Windows (PowerShell) equivalent of `no-ai-attribution.sh`. |
-| `no-squash-merge.ps1` | Windows (PowerShell) equivalent of `no-squash-merge.sh`. |
-
-- Install hooks on every machine, even if Copilot CLI has never been run: create `~/.copilot/` and
-  `~/.copilot/hooks/` if they do not exist, overwrite existing copies of these six files, and leave
-  any other files in that directory alone.
-- Install all six files on every OS (the `.json` files select the right script per platform).
-  On macOS/Linux run `chmod +x ~/.copilot/hooks/no-ai-attribution.sh ~/.copilot/hooks/no-squash-merge.sh`;
-  skip `chmod` on Windows, where `~/.copilot/` is `%USERPROFILE%\.copilot\`.
-- Verify by piping a JSON payload whose `toolArgs` command is a `git commit` containing a
-  `Co-authored-by: Copilot` line into the script for the current OS (`.sh` via `bash`, `.ps1` via
-  `powershell -File`) and confirming it prints a `permissionDecision`
-  of `deny`; a clean `git commit` payload must print nothing.
-  Likewise a `gh pr merge 1 --squash` payload must print `deny` and a `gh pr merge 1 --merge`
-  payload must print nothing.
-- The hook takes effect on the next Copilot CLI session.
-
-## Requirements
-
-- After fetching each INSTRUCTION source URL, strip its existing frontmatter (if any) before
-  inserting the remaining body content into the canonical `~/.agents/instructions/` files.
-- Agent files and skill files are copied verbatim; do not strip their frontmatter.
-- If a target file already exists, merge new source content without overwriting project-specific
-  priorities. The conflict resolution priority must remain: project-level instructions (a repo'\''s
-  own `AGENTS.md`/`CLAUDE.md`/`.instructions.md`) > these user-level files > externally
-  referenced docs.
-- After creating/updating the files, list them and confirm their paths.
-- If the source URLs are unreachable, stop and report the error; do not create empty files.
-- The GitHub API tree calls (`mattpocock/skills`, `jakehildreth/jakehildreth`,
-  `DietrichGebert/ponytail`) are the source of
-  truth for those skills'\'' file lists. If any of them fail (rate limit, offline), stop and report
-  it; do not guess file names.
-'
-
-    if [[ "$(uname -s)" == 'Darwin' ]]; then
-        printf '%s' "$prompt" | pbcopy
-    elif command -v xclip &>/dev/null; then
-        printf '%s' "$prompt" | xclip -selection clipboard
-    elif command -v xsel &>/dev/null; then
-        printf '%s' "$prompt" | xsel --clipboard --input
-    else
-        printf '[!] No clipboard tool found. Copy the following manually:\n\n%s\n' "$prompt"
+# Copy src to dst; back dst up first when its content would change.
+__gai_put() {
+    local src="$1" dst="$2"
+    [[ "$src" -ef "$dst" ]] && return 0
+    mkdir -p "$(dirname "$dst")" || return 1
+    if [[ -e "$dst" ]]; then
+        cmp -s "$src" "$dst" && return 0
+        cp "$dst" "$dst.bak.$__GAI_TS" || return 1
     fi
+    cp "$src" "$dst" || return 1
+    [[ "$dst" == *.sh ]] && chmod +x "$dst"
+    __GAI_CHANGED=$((__GAI_CHANGED + 1))
+    return 0
+}
+
+__gai_copytree() {
+    local srcdir="${1%/}" dstdir="$2" f
+    [[ -d "$srcdir" ]] || return 0
+    while IFS= read -r f; do
+        __gai_put "$f" "$dstdir/${f#"$srcdir"/}" || return 1
+    done < <(find -L "$srcdir" -type f ! -name '*.bak.*' ! -name '.DS_Store')
+}
+
+# Replace (or append) the managed block in a shared markdown file.
+__gai_block() {
+    local target="$1" body="$2" new rc
+    new="$(mktemp)" || return 1
+    { printf '<!-- BEGIN gai (managed block; edits here are overwritten) -->\n'; cat "$body"; printf '\n<!-- END gai -->\n'; } > "$new.blk"
+    if [[ -f "$target" ]] && grep -q '<!-- BEGIN gai' "$target"; then
+        awk -v blk="$new.blk" '/<!-- BEGIN gai/{while((getline l<blk)>0)print l; skip=1; next} /<!-- END gai -->/{skip=0; next} !skip' "$target" > "$new"
+    elif [[ -f "$target" ]]; then
+        { cat "$target"; printf '\n'; cat "$new.blk"; } > "$new"
+    else
+        cp "$new.blk" "$new"
+    fi
+    __gai_put "$new" "$target"
+    rc=$?
+    rm -f "$new" "$new.blk"
+    return $rc
+}
+
+# shortcut: assumes jq output is one "<repo path><TAB><dest path>" per line; a truncated tree fails the source.
+__gai_fetch_listed() {
+    local repo="$1" filter="$2" dest="$3" tree list src rel
+    tree="$(curl -fsSL --connect-timeout 10 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$repo/git/trees/HEAD?recursive=1")" || return 1
+    [[ "$(printf '%s' "$tree" | jq -r '.truncated')" == false ]] || return 1
+    list="$(printf '%s' "$tree" | jq -r "$filter")" || return 1
+    [[ -n "$list" ]] || return 1
+    while IFS=$'\t' read -r src rel; do
+        __gai_fetch "https://raw.githubusercontent.com/$repo/HEAD/$src" "$dest/$rel" || return 1
+    done <<< "$list"
+}
+
+__gai_src_own() {
+    local s="$1" own='https://raw.githubusercontent.com/jakehildreth/jakehildreth/HEAD' f
+    __gai_instr "$own/.github/copilot-instructions.md" "$s/instructions/personal.md" || return 1
+    for f in no-ai-attribution.json no-ai-attribution.sh no-ai-attribution.ps1 no-squash-merge.json no-squash-merge.sh no-squash-merge.ps1; do
+        __gai_fetch "$own/hooks/$f" "$s/hooks/$f" || return 1
+    done
+    __gai_fetch_listed jakehildreth/jakehildreth '.tree[]|select(.type=="blob")|.path as $p|select($p|test("^skills/(conference-talk-summary|new-linkedin-post|talk-developer|writing-voice)/"))|"\($p)\t\($p|ltrimstr("skills/"))"' "$s/skills"
+}
+
+__gai_src_awesome() {
+    local s="$1" a='https://raw.githubusercontent.com/github/awesome-copilot/HEAD' f
+    __gai_instr "$a/instructions/powershell.instructions.md" "$s/instructions/powershell.md" || return 1
+    __gai_instr "$a/instructions/powershell-pester-6.instructions.md" "$s/instructions/pester.md" || return 1
+    __gai_instr "$a/instructions/csharp.instructions.md" "$s/instructions/csharp.md" || return 1
+    for f in CSharpExpert.agent.md csharp-dotnet-janitor.agent.md; do
+        __gai_fetch "$a/agents/$f" "$s/agents/$f" || return 1
+    done
+    for f in pester-migration/SKILL.md pester-migration/references/v3-to-v4.md pester-migration/references/v4-to-v5.md pester-migration/references/v5-to-v6.md csharp-docs/SKILL.md; do
+        __gai_fetch "$a/skills/$f" "$s/skills/$f" || return 1
+    done
+}
+
+__gai_src_pocock() {
+    __gai_fetch_listed mattpocock/skills '.tree[]|select(.type=="blob")|.path as $p|($p|capture("^skills/(?:engineering|productivity)/(?<r>[^/]+/.+)$")?)|"\($p)\t\(.r)"' "$1/skills"
+}
+
+__gai_src_ponytail() {
+    __gai_fetch_listed DietrichGebert/ponytail '.tree[]|select(.type=="blob")|.path as $p|($p|capture("^skills/(?<r>[^/]+/SKILL\\.md)$")?)|"\($p)\t\(.r)"' "$1/skills"
+}
+
+# Fetch a source into a temp dir; write it to ~/.agents only if every fetch worked.
+__gai_run() {
+    local stage rc=0
+    stage="$(mktemp -d)" || return 1
+    if "$2" "$stage" && __gai_copytree "$stage" "$HOME/.agents"; then
+        printf '[+] %s\n' "$1"
+    else
+        printf '[x] %s failed; skipped\n' "$1" >&2
+        rc=1
+    fi
+    rm -rf "$stage"
+    return $rc
+}
+
+# Copy from ~/.agents into each harness directory that already exists.
+__gai_distribute() {
+    local h n apply body f
+    local inst="$HOME/.agents/instructions"
+    for h in "$HOME/.claude" "$HOME/.omp/agent" "$HOME/.copilot"; do
+        [[ -d "$h" ]] && { __gai_copytree "$HOME/.agents/skills" "$h/skills" || return 1; }
+    done
+    [[ -d "$HOME/.claude" ]] && { __gai_copytree "$HOME/.agents/agents" "$HOME/.claude/agents" || return 1; }
+    [[ -d "$HOME/.copilot" ]] && { __gai_copytree "$HOME/.agents/hooks" "$HOME/.copilot/hooks" || return 1; }
+
+    body="$(mktemp)" || return 1
+    for n in personal powershell pester csharp; do
+        [[ -f "$inst/$n.md" ]] && { cat "$inst/$n.md"; printf '\n'; } >> "$body"
+    done
+    __gai_block "$HOME/AGENTS.md" "$body"
+    [[ -d "$HOME/.claude" && ! "$HOME/.claude/CLAUDE.md" -ef "$HOME/AGENTS.md" ]] && __gai_block "$HOME/.claude/CLAUDE.md" "$body"
+    [[ -d "$HOME/.omp/agent" ]] && __gai_block "$HOME/.omp/agent/AGENTS.md" "$body"
+    rm -f "$body"
+
+    if [[ -d "$HOME/.copilot" ]]; then
+        for n in personal powershell pester csharp; do
+            [[ -f "$inst/$n.md" ]] || continue
+            case "$n" in
+                personal)   apply='**/*' ;;
+                powershell) apply='**/*.ps1,**/*.psm1' ;;
+                pester)     apply='**/*.Tests.ps1' ;;
+                csharp)     apply='**/*.cs' ;;
+            esac
+            f="$(mktemp)" || return 1
+            { printf -- "---\napplyTo: '%s'\n---\n\n" "$apply"; cat "$inst/$n.md"; } > "$f"
+            __gai_put "$f" "$HOME/.copilot/instructions/$n.instructions.md"
+            rm -f "$f"
+        done
+    fi
+    return 0
+}
+
+gai() {
+    local rc=0
+    command -v curl >/dev/null || { printf '[x] gai needs curl\n' >&2; return 1; }
+    command -v jq >/dev/null || { printf '[x] gai needs jq (brew install jq / apt install jq)\n' >&2; return 1; }
+    __GAI_TS="$(date +%Y%m%d%H%M%S)"
+    __GAI_CHANGED=0
+    __gai_run 'jakehildreth: instructions, hooks, skills' __gai_src_own || rc=1
+    __gai_run 'awesome-copilot: instructions, agents, skills' __gai_src_awesome || rc=1
+    __gai_run 'mattpocock/skills' __gai_src_pocock || rc=1
+    __gai_run 'DietrichGebert/ponytail' __gai_src_ponytail || rc=1
+    __gai_distribute || { printf '[x] distribute failed\n' >&2; rc=1; }
+    printf '[i] %s file(s) written; replaced files are kept as *.bak.%s\n' "$__GAI_CHANGED" "$__GAI_TS"
+    return $rc
 }
 
