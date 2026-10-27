@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.10.141233
+# Version 2026.10.262045
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -154,7 +154,7 @@ function Get-AgentInstructions {
     @'
 ---
 description: "Install or update Jake's global user-level agent instructions, agents, and skills from raw URLs"
-version: "2026.10.141233"
+version: "2026.10.262045"
 ---
 
 # Install Global Agent Instructions, Agents, and Skills
@@ -311,6 +311,28 @@ For each installed harness with its own skills directory, symlink EVERY skill in
 | omp | `~/.omp/agent/skills/` |
 | Claude Code | `~/.claude/skills/` |
 | VS Code Copilot | `~/.copilot/skills/` |
+
+## Hooks to install
+
+Copilot CLI user-level hooks enforce rules that instructions alone cannot guarantee. Fetch each
+file below verbatim (do NOT modify it) from
+`https://raw.githubusercontent.com/jakehildreth/jakehildreth/refs/heads/main/hooks/<file>` and
+write it to `~/.copilot/hooks/<file>`:
+
+| File | Purpose |
+|---|---|
+| `no-ai-attribution.json` | Registers a `preToolUse` command hook that runs the script below. |
+| `no-ai-attribution.sh` | Denies `git commit` and `gh pr create`/`gh pr edit` commands that add AI attribution (`Co-authored-by:` Copilot/Claude/etc., `Generated-By:`, `Generated with`), so the agent must retry without it. |
+
+- Install hooks ONLY if Copilot CLI is already configured on this machine (`~/.copilot/` exists);
+  do not create `~/.copilot/` otherwise.
+- Create `~/.copilot/hooks/` if needed, overwrite existing copies of these two files, and leave
+  any other files in that directory alone.
+- Run `chmod +x ~/.copilot/hooks/no-ai-attribution.sh`.
+- Verify by piping a JSON payload whose `toolArgs` command is a `git commit` containing a
+  `Co-authored-by: Copilot` line into the script and confirming it prints a `permissionDecision`
+  of `deny`; a clean `git commit` payload must print nothing.
+- The hook takes effect on the next Copilot CLI session.
 
 ## Requirements
 
