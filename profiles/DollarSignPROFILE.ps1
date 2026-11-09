@@ -1,5 +1,5 @@
 # DollarSignPROFILE.ps1
-# Version 2026.10.262245
+# Version 2026.11.81702
 # https://github.com/jakehildreth/profile/profiles/DollarSignPROFILE.ps1
 
 #region Self-Update
@@ -113,6 +113,10 @@ function $FunctionName {
 function prompt {
     Write-Host
     $CurrentLocation = $executionContext.SessionState.Path.CurrentLocation
+    # Set-Location does not change the process cwd. Sync it so terminals (Herdr) can follow it.
+    if ($CurrentLocation.Provider.Name -eq 'FileSystem') {
+        [Environment]::CurrentDirectory = $CurrentLocation.ProviderPath
+    }
     $GitBranch = & { $ErrorActionPreference = 'SilentlyContinue'; git rev-parse --abbrev-ref HEAD 2>&1 } | Where-Object { $_ -is [string] }
     if ($LASTEXITCODE -eq 0 -and $GitBranch -and $GitBranch -ne 'HEAD') {
         Write-Host "[$($Host.UI.RawUI.WindowSize.Width)x$($Host.UI.RawUI.WindowSize.Height)] $($CurrentLocation.ToString() -ireplace [regex]::escape($HOME),'~') [$GitBranch]"
